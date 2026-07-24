@@ -1,4 +1,11 @@
+import os
+
 from deepeval.test_case import LLMTestCaseParams
+
+# GEval metrics are constructed at module import time in evaluation.metrics, and
+# GEval.__init__ requires OPENAI_API_KEY to be set even though these unit tests
+# never make a real API call; setdefault avoids clobbering a real key if present.
+os.environ.setdefault("OPENAI_API_KEY", "sk-test-dummy-key-for-unit-tests")
 
 from evaluation.metrics import (
     build_test_case,
