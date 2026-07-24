@@ -54,6 +54,8 @@ def test_rank_command_writes_json_and_markdown_reports(tmp_path, monkeypatch):
             "--resumes-dir", str(resumes_dir),
             "--out-json", str(out_json),
             "--out-md", str(out_md),
+            "--prefilter-threshold", "0.7",
+            "--hallucination-threshold", "90.0",
         ],
     )
 
@@ -64,3 +66,5 @@ def test_rank_command_writes_json_and_markdown_reports(tmp_path, monkeypatch):
     assert data["calibrated_results"][0]["candidate_id"] == "candidate1"
     invoked_state = fake_graph.invoke.call_args[0][0]
     assert "candidate1" in invoked_state["raw_resumes"]
+    assert invoked_state["prefilter_threshold"] == 0.7
+    assert invoked_state["hallucination_threshold"] == 90.0
