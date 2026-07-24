@@ -1,0 +1,99 @@
+from typing import TypedDict
+
+from langgraph.graph import END, StateGraph
+
+from evidencerank.agents.calibrator import calibrate_pool
+from evidencerank.agents.cv_extractor import extract_cv
+from evidencerank.agents.hallucination_checker import DEFAULT_THRESHOLD, check_evidence
+from evidencerank.agents.judge import judge_candidate
+from evidencerank.agents.prefilter import prefilter_candidate
+from evidencerank.models import (
+    CalibratedResult,
+    CandidateProfile,
+    HallucinationReport,
+    JDRequirements,
+    JudgeResult,
+    PrefilterResult,
+)
+
+
+class PipelineState(TypedDict, total=False):
+    jd: JDRequirements
+    raw_resumes: dict[str, str]
+    profiles: dict[str, CandidateProfile]
+    prefilter_results: dict[str, PrefilterResult]
+    dropped: list[dict[str, str]]
+    judge_results: dict[str, JudgeResult]
+    calibrated_results: list[CalibratedResult]
+    hallucination_reports: dict[str, HallucinationReport]
+    prefilter_threshold: float
+    hallucination_threshold: float
+
+
+def extract_profiles_node(state: PipelineState) -> dict:
+    profiles = {
+        candidate_id: extract_cv(candidate_id, raw_text)
+        for candidate_id, raw_text in state["raw_resumes"].items()
+    }
+    return {"profiles": profiles}
+
+
+def prefilter_node(state: PipelineState) -> dict:
+    threshold = state.get("prefilter_threshold", 0.5)
+    results: dict[str, PrefilterResult] = {}
+    dropped: list[dict[str, str]] = []
+    for candidate_id, profile in state["profiles"].items():
+        result = prefilter_candidate(
+            candidate_id,
+            state["jd"].required_skills,
+            profile.skills,
+            threshold=threshold,
+        )
+        results[candidate_id] = result
+        if not result.passed:
+            dropped.append(
+                {"candidate_id": candidate_id, "reason": "pre-filter: no relevant skill overlap"}
+            )
+    return {"prefilter_results": results, "dropped": dropped}
+
+
+def judge_node(state: PipelineState) -> dict:
+    judge_results: dict[str, JudgeResult] = {}
+    for candidate_id, result in state["prefilter_results"].items():
+        if not result.passed:
+            continue
+        profile = state["profiles"][candidate_id]
+        judge_results[candidate_id] = judge_candidate(state["jd"], profile)
+    return {"judge_results": judge_results}
+
+
+def calibrate_node(state: PipelineState) -> dict:
+    calibrated = calibrate_pool(state["jd"], list(state["judge_results"].values()))
+    return {"calibrated_results": calibrated}
+
+
+def hallucination_check_node(state: PipelineState) -> dict:
+    threshold = state.get("hallucination_threshold", DEFAULT_THRESHOLD)
+    reports = {}
+    for candidate_id, judge_result in state["judge_results"].items():
+        raw_text = state["profiles"][candidate_id].raw_cv_text
+        reports[candidate_id] = check_evidence(judge_result, raw_text, threshold=threshold)
+    return {"hallucination_reports": reports}
+
+
+def build_graph():
+    graph = StateGraph(PipelineState)
+    graph.add_node("extract_profiles", extract_profiles_node)
+    graph.add_node("prefilter", prefilter_node)
+    graph.add_node("judge", judge_node)
+    graph.add_node("calibrate", calibrate_node)
+    graph.add_node("hallucination_check", hallucination_check_node)
+
+    graph.set_entry_point("extract_profiles")
+    graph.add_edge("extract_profiles", "prefilter")
+    graph.add_edge("prefilter", "judge")
+    graph.add_edge("judge", "calibrate")
+    graph.add_edge("calibrate", "hallucination_check")
+    graph.add_edge("hallucination_check", END)
+
+    return graph.compile()
