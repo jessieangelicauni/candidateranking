@@ -40,13 +40,26 @@ def _escape_table_cell(text: str) -> str:
     return text.replace("|", "\\|").replace("\r\n", " ").replace("\n", " ").replace("\r", " ")
 
 
+def _format_evidence(state: dict, candidate_id: str) -> str:
+    """Render a candidate's Judge evidence claims as one Markdown table cell."""
+    judge_result = state.get("judge_results", {}).get(candidate_id)
+    if judge_result is None:
+        return ""
+    joined = "; ".join(f"{claim.claim}: {claim.quote}" for claim in judge_result.evidence)
+    return _escape_table_cell(joined)
+
+
 def build_markdown_report(state: dict) -> str:
-    lines = ["| Rank | Candidate | Tier | Rating | Calibration Notes |", "|---|---|---|---|---|"]
+    lines = [
+        "| Rank | Candidate | Tier | Rating | Key Evidence | Calibration Notes |",
+        "|---|---|---|---|---|---|",
+    ]
     for result in sorted(state.get("calibrated_results", []), key=lambda r: r.final_rank):
         notes = _escape_table_cell(result.calibration_notes)
+        evidence = _format_evidence(state, result.candidate_id)
         lines.append(
             f"| {result.final_rank} | {result.candidate_id} | {result.tier.value} "
-            f"| {result.rating} | {notes} |"
+            f"| {result.rating} | {evidence} | {notes} |"
         )
     return "\n".join(lines)
 

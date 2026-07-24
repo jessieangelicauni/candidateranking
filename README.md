@@ -28,6 +28,12 @@ uv run evidencerank \
 This produces `report.json` (full evidence trail, including dropped candidates and
 hallucination check results) and `report.md` (a ranked Markdown table).
 
+**Note:** `report.json`'s `profiles` section contains unredacted candidate identity
+data (name, email, phone, location, raw CV text) — this is an intentional full
+audit-trail artifact. It is not the same view the Judge model sees (that input is
+redacted for blind evaluation; see the design spec's Fairness section). Don't treat or
+share `report.json` as if it were already anonymized.
+
 ## Model configuration
 
 Override any stage's model with an environment variable:
@@ -46,6 +52,11 @@ The `evaluation/` package is separate from the production pipeline (`src/evidenc
   EvidenceRelevancy) to run against pipeline output.
 - `evaluation/rank_stability.py` — computes Spearman/Kendall-tau rank correlation across
   repeated runs on the same input, to report LLM judgment consistency.
+
+**Note:** unlike the fully-local, Ollama-only production pipeline in `src/evidencerank/`,
+the three `GEval` metrics in `evaluation/metrics.py` default to an OpenAI-backed judge
+model at runtime. Running them for real requires a valid `OPENAI_API_KEY` in the
+environment. (The test suite uses a dummy key and never makes a real API call.)
 
 To measure rank stability, run the pipeline N times on the same JD/resumes with
 different `--out-json` paths, then:
