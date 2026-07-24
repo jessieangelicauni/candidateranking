@@ -29,14 +29,29 @@ Assign a tier (Strong Fit, Moderate Fit, Weak Fit, Not a Fit) and a rating from 
 
 def judge_candidate(jd: JDRequirements, profile: CandidateProfile) -> JudgeResult:
     redacted_text = redact_identity(profile.raw_cv_text, profile.contact)
+
+    redacted_work_history = []
+    for entry in profile.work_history:
+        entry_dump = entry.model_dump()
+        entry_dump["achievements"] = [
+            redact_identity(achievement, profile.contact) for achievement in entry.achievements
+        ]
+        redacted_work_history.append(entry_dump)
+
+    redacted_projects = []
+    for entry in profile.projects:
+        entry_dump = entry.model_dump()
+        entry_dump["description"] = redact_identity(entry.description, profile.contact)
+        redacted_projects.append(entry_dump)
+
     model = get_chat_model("judge").with_structured_output(JudgeVerdict)
     prompt = JUDGE_PROMPT.format(
         jd_requirements=jd.model_dump_json(),
         redacted_cv_text=redacted_text,
         skills=profile.skills,
-        work_history=[entry.model_dump() for entry in profile.work_history],
+        work_history=redacted_work_history,
         education=[entry.model_dump() for entry in profile.education],
-        projects=[entry.model_dump() for entry in profile.projects],
+        projects=redacted_projects,
     )
     verdict = model.invoke(prompt)
     return JudgeResult(candidate_id=profile.candidate_id, **verdict.model_dump())
