@@ -1,0 +1,22 @@
+Machine Learning Engineer
+
+We are looking for a Machine Learning Engineer with the following requirements:
+
+Required:
+
+Python
+Machine Learning
+Deep Learning
+PyTorch or TensorFlow
+Model training and evaluation
+2+ years of machine learning experience
+Bachelor's degree in Computer Science, Data Science, Machine Learning, or a related field
+
+Nice to have:
+
+Docker
+Cloud platforms (AWS, GCP, or Azure)
+SQL
+Git
+
+The role involves building, training, and deploying machine learning models, preparing data, and working with software engineers to develop AI applications.

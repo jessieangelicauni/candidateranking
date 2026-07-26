@@ -1,11 +1,14 @@
 from pathlib import Path
 
 import click
+from dotenv import load_dotenv
 
 from evidencerank.agents.jd_parser import parse_jd
 from evidencerank.graph import build_graph
 from evidencerank.io import load_resume_text, load_text_file
 from evidencerank.report import write_json_report, write_markdown_report
+
+load_dotenv()
 
 
 @click.command()

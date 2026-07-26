@@ -1,5 +1,6 @@
 from typing import TypedDict
 
+import click
 from langgraph.graph import END, StateGraph
 
 from evidencerank.agents.calibrator import calibrate_pool
@@ -31,6 +32,7 @@ class PipelineState(TypedDict, total=False):
 
 
 def extract_profiles_node(state: PipelineState) -> dict:
+    click.echo("Running stage: extract_profiles")
     profiles = {
         candidate_id: extract_cv(candidate_id, raw_text)
         for candidate_id, raw_text in state["raw_resumes"].items()
@@ -39,6 +41,7 @@ def extract_profiles_node(state: PipelineState) -> dict:
 
 
 def prefilter_node(state: PipelineState) -> dict:
+    click.echo("Running stage: prefilter")
     threshold = state.get("prefilter_threshold", 0.5)
     results: dict[str, PrefilterResult] = {}
     dropped: list[dict[str, str]] = []
@@ -58,6 +61,7 @@ def prefilter_node(state: PipelineState) -> dict:
 
 
 def judge_node(state: PipelineState) -> dict:
+    click.echo("Running stage: judge")
     judge_results: dict[str, JudgeResult] = {}
     for candidate_id, result in state["prefilter_results"].items():
         if not result.passed:
@@ -68,11 +72,13 @@ def judge_node(state: PipelineState) -> dict:
 
 
 def calibrate_node(state: PipelineState) -> dict:
+    click.echo("Running stage: calibrate")
     calibrated = calibrate_pool(state["jd"], list(state["judge_results"].values()))
     return {"calibrated_results": calibrated}
 
 
 def hallucination_check_node(state: PipelineState) -> dict:
+    click.echo("Running stage: hallucination_check")
     threshold = state.get("hallucination_threshold", DEFAULT_THRESHOLD)
     reports = {}
     for candidate_id, judge_result in state["judge_results"].items():

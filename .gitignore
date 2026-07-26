@@ -5,3 +5,5 @@ __pycache__/
 report.json
 report.md
 *.egg-info/
+.env
+.claude/

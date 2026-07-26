@@ -1,5 +1,14 @@
+import os
+
 from deepeval.metrics import GEval
+from deepeval.models import OllamaModel
 from deepeval.test_case import LLMTestCase, LLMTestCaseParams
+from dotenv import load_dotenv
+
+load_dotenv()
+
+_EVAL_MODEL_NAME = os.environ.get("EVIDENCERANK_EVAL_MODEL", "qwen2.5:14b-instruct")
+_eval_model = OllamaModel(model=_EVAL_MODEL_NAME)
 
 groundedness_metric = GEval(
     name="Groundedness",
@@ -10,6 +19,7 @@ groundedness_metric = GEval(
     ),
     evaluation_params=[LLMTestCaseParams.ACTUAL_OUTPUT, LLMTestCaseParams.CONTEXT],
     threshold=0.7,
+    model=_eval_model,
 )
 
 recruiter_alignment_metric = GEval(
@@ -22,6 +32,7 @@ recruiter_alignment_metric = GEval(
     ),
     evaluation_params=[LLMTestCaseParams.INPUT, LLMTestCaseParams.ACTUAL_OUTPUT],
     threshold=0.7,
+    model=_eval_model,
 )
 
 evidence_relevancy_metric = GEval(
@@ -33,6 +44,7 @@ evidence_relevancy_metric = GEval(
     ),
     evaluation_params=[LLMTestCaseParams.INPUT, LLMTestCaseParams.ACTUAL_OUTPUT],
     threshold=0.7,
+    model=_eval_model,
 )
 
 
