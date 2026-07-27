@@ -128,3 +128,77 @@ def test_compute_geval_scores_single_candidate_std_is_none(tmp_path, monkeypatch
     assert scores["Groundedness"]["mean"] == 0.6
     assert scores["Groundedness"]["std"] is None
     assert scores["Groundedness"]["pass_rate"] == 0.0  # 0.6 < 0.7 threshold
+
+
+def _write_calibrated_report(path: Path, ranks: dict[str, int]) -> None:
+    _write_geval_report(
+        path,
+        judge_results={
+            candidate_id: {"tier": "Strong Fit", "rating": 8, "evidence": []}
+            for candidate_id in ranks
+        },
+    )
+    data = json.loads(path.read_text(encoding="utf-8"))
+    data["calibrated_results"] = [
+        {
+            "candidate_id": candidate_id,
+            "final_rank": final_rank,
+            "tier": "Strong Fit",
+            "rating": 8,
+            "calibration_notes": "",
+        }
+        for candidate_id, final_rank in ranks.items()
+    ]
+    path.write_text(json.dumps(data), encoding="utf-8")
+
+
+def test_build_eval_markdown_report_single_run_omits_rank_stability(tmp_path, monkeypatch):
+    from evaluation.report import build_eval_markdown_report
+
+    report_path = tmp_path / "report.json"
+    _write_calibrated_report(report_path, {"alice": 1, "bob": 2})
+
+    monkeypatch.setattr(groundedness_metric, "measure", Mock(return_value=0.9))
+    monkeypatch.setattr(recruiter_alignment_metric, "measure", Mock(return_value=0.9))
+    monkeypatch.setattr(evidence_relevancy_metric, "measure", Mock(return_value=0.9))
+
+    markdown = build_eval_markdown_report([report_path])
+
+    assert "## Pipeline Stats" in markdown
+    assert "## GEval Metrics" in markdown
+    assert "## Rank Stability" not in markdown
+
+
+def test_build_eval_markdown_report_multi_run_includes_rank_stability(tmp_path, monkeypatch):
+    from evaluation.report import build_eval_markdown_report
+
+    report_a = tmp_path / "report_a.json"
+    report_b = tmp_path / "report_b.json"
+    _write_calibrated_report(report_a, {"alice": 1, "bob": 2})
+    _write_calibrated_report(report_b, {"alice": 1, "bob": 2})
+
+    monkeypatch.setattr(groundedness_metric, "measure", Mock(return_value=0.9))
+    monkeypatch.setattr(recruiter_alignment_metric, "measure", Mock(return_value=0.9))
+    monkeypatch.setattr(evidence_relevancy_metric, "measure", Mock(return_value=0.9))
+
+    markdown = build_eval_markdown_report([report_a, report_b])
+
+    assert "## Rank Stability" in markdown
+    assert "1.000" in markdown  # identical rankings -> spearman/kendall == 1.0
+
+
+def test_write_eval_markdown_report_writes_file(tmp_path, monkeypatch):
+    from evaluation.report import write_eval_markdown_report
+
+    report_path = tmp_path / "report.json"
+    _write_calibrated_report(report_path, {"alice": 1})
+    out_path = tmp_path / "eval_report.md"
+
+    monkeypatch.setattr(groundedness_metric, "measure", Mock(return_value=0.9))
+    monkeypatch.setattr(recruiter_alignment_metric, "measure", Mock(return_value=0.9))
+    monkeypatch.setattr(evidence_relevancy_metric, "measure", Mock(return_value=0.9))
+
+    write_eval_markdown_report([report_path], out_path)
+
+    assert out_path.exists()
+    assert "## Pipeline Stats" in out_path.read_text(encoding="utf-8")

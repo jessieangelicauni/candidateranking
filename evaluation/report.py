@@ -10,6 +10,7 @@ from evaluation.metrics import (
     groundedness_metric,
     recruiter_alignment_metric,
 )
+from evaluation.rank_stability import rank_stability
 
 
 def compute_pipeline_stats(report_path: str | Path) -> dict:
@@ -80,3 +81,61 @@ def compute_geval_scores(report_path: str | Path) -> dict[str, dict]:
         scores = [metric.measure(test_case) for test_case in test_cases]
         results[metric.name] = _aggregate_scores(scores, metric.threshold)
     return results
+
+
+def build_eval_markdown_report(report_paths: list[str | Path]) -> str:
+    primary = report_paths[0]
+    data = json.loads(Path(primary).read_text(encoding="utf-8"))
+    stats = compute_pipeline_stats(primary)
+    geval = compute_geval_scores(primary)
+
+    lines = [
+        "# Evaluation Metric Report",
+        "",
+        f"**JD:** {data['jd']['title']}",
+        f"**Primary report:** {primary}",
+    ]
+    if len(report_paths) > 1:
+        extra = ", ".join(str(path) for path in report_paths[1:])
+        lines.append(f"**Additional reports (rank stability):** {extra}")
+    lines += [
+        "",
+        "## Pipeline Stats",
+        "",
+        "| Metric | Value |",
+        "|---|---|",
+        f"| Total candidates | {stats['total_candidates']} |",
+        f"| Passed pre-filter | {stats['passed_prefilter']} |",
+        f"| Dropped by pre-filter | {stats['dropped_prefilter']} |",
+        f"| Evaluated by Judge | {stats['evaluated_by_judge']} |",
+        f"| Hallucination-flagged candidates | {stats['hallucination_flagged']} |",
+        "",
+        "## GEval Metrics",
+        "",
+        "| Metric | n | Mean | Std Dev | Pass Rate |",
+        "|---|---|---|---|---|",
+    ]
+    for name in ("Groundedness", "RecruiterAlignment", "EvidenceRelevancy"):
+        m = geval[name]
+        mean_str = f"{m['mean']:.3f}" if m["mean"] is not None else "N/A"
+        std_str = f"{m['std']:.3f}" if m["std"] is not None else "N/A"
+        pass_str = f"{m['pass_rate']:.1%}" if m["pass_rate"] is not None else "N/A"
+        lines.append(f"| {name} | {m['n']} | {mean_str} | {std_str} | {pass_str} |")
+
+    if len(report_paths) >= 2:
+        stability = rank_stability([str(path) for path in report_paths])
+        lines += [
+            "",
+            "## Rank Stability",
+            "",
+            "| Runs | Mean Spearman | Mean Kendall Tau |",
+            "|---|---|---|",
+            f"| {stability['n_runs']} | {stability['mean_spearman']:.3f} "
+            f"| {stability['mean_kendall_tau']:.3f} |",
+        ]
+
+    return "\n".join(lines)
+
+
+def write_eval_markdown_report(report_paths: list[str | Path], path: str | Path) -> None:
+    Path(path).write_text(build_eval_markdown_report(report_paths), encoding="utf-8")
