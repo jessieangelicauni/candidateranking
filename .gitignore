@@ -8,3 +8,4 @@ report.md
 .env
 .claude/
 .superpowers/
+.cache/
