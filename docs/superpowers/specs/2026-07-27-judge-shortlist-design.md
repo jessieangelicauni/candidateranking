@@ -20,7 +20,14 @@ separately by raising `num_ctx` to 32768 and validating the output — see
 same failure mode to a larger pool size; it doesn't remove it.
 
 This design adds an explicit shortlist step between `judge` and `calibrate` so the calibrator's
-input is bounded by construction, and so the code matches its own stated intent.
+input is reduced to the judge's top 10 by rating in the common case, and so the code matches its
+own stated intent. This is not a hard bound: `JudgeResult.rating` only has 10 possible values
+(1-10), so ties at the boundary are common, not rare, and every tied candidate is kept (see
+Scope below) — a pool where many candidates share the top rating can still send the whole pool
+to the calibrator. The actual backstop against silent data loss remains the existing
+`CALIBRATOR_NUM_CTX` (32768) plus the output-count validation in `calibrate_pool()`
+(`src/evidencerank/agents/calibrator.py`); this shortlist reduces how often that backstop is
+needed, it does not replace it.
 
 ## Scope
 
@@ -114,7 +121,9 @@ def select_shortlist(
 2. `shortlist_node` reads `judge_results`, calls `select_shortlist`, and stores
    `shortlisted_ids` + `not_shortlisted` in state.
 3. `calibrate_node` filters `judge_results` down to `shortlisted_ids` before building the
-   calibrator prompt — bounding its size regardless of how large the judged pool grows.
+   calibrator prompt — reducing its size in the common case, though a pool with many
+   candidates tied at the same top rating can still produce a shortlist as large as the
+   original pool (see Purpose above).
 4. `hallucination_check_node` is unaffected — it already iterates `judge_results` (the full
    judged pool), independent of calibration/shortlisting.
 5. `report.py` writes `not_shortlisted` into `report.json` and renders `report.md` from

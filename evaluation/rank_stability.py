@@ -12,7 +12,13 @@ def load_rank_map(report_path: str | Path) -> dict[str, int]:
 
 def rank_stability(report_paths: list[str]) -> dict:
     rank_maps = [load_rank_map(path) for path in report_paths]
-    candidate_ids = sorted(rank_maps[0].keys())
+    candidate_ids = sorted(set.intersection(*(set(rank_map) for rank_map in rank_maps)))
+    if len(candidate_ids) < 2:
+        raise ValueError(
+            f"Only {len(candidate_ids)} candidate(s) were shortlisted in every run "
+            f"({len(report_paths)} runs given) - rank correlation needs at least 2 "
+            "candidates common to all runs to be meaningful."
+        )
 
     spearman_scores = []
     kendall_scores = []

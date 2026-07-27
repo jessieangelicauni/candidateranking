@@ -8,6 +8,7 @@ from evidencerank.agents.cv_extractor import cached_extract_cv
 from evidencerank.agents.hallucination_checker import DEFAULT_THRESHOLD, check_evidence
 from evidencerank.agents.judge import judge_candidate
 from evidencerank.agents.prefilter import prefilter_candidate
+from evidencerank.agents.shortlist import select_shortlist
 from evidencerank.models import (
     CalibratedResult,
     CandidateProfile,
@@ -25,6 +26,8 @@ class PipelineState(TypedDict, total=False):
     prefilter_results: dict[str, PrefilterResult]
     dropped: list[dict[str, str]]
     judge_results: dict[str, JudgeResult]
+    shortlisted_ids: set[str]
+    not_shortlisted: list[dict[str, str]]
     calibrated_results: list[CalibratedResult]
     hallucination_reports: dict[str, HallucinationReport]
     prefilter_threshold: float
@@ -71,9 +74,23 @@ def judge_node(state: PipelineState) -> dict:
     return {"judge_results": judge_results}
 
 
+def shortlist_node(state: PipelineState) -> dict:
+    click.echo("Running stage: shortlist")
+    shortlisted, not_shortlisted = select_shortlist(list(state["judge_results"].values()))
+    return {
+        "shortlisted_ids": {result.candidate_id for result in shortlisted},
+        "not_shortlisted": not_shortlisted,
+    }
+
+
 def calibrate_node(state: PipelineState) -> dict:
     click.echo("Running stage: calibrate")
-    calibrated = calibrate_pool(state["jd"], list(state["judge_results"].values()))
+    pool = [
+        result
+        for result in state["judge_results"].values()
+        if result.candidate_id in state["shortlisted_ids"]
+    ]
+    calibrated = calibrate_pool(state["jd"], pool)
     return {"calibrated_results": calibrated}
 
 
@@ -92,13 +109,15 @@ def build_graph():
     graph.add_node("extract_profiles", extract_profiles_node)
     graph.add_node("prefilter", prefilter_node)
     graph.add_node("judge", judge_node)
+    graph.add_node("shortlist", shortlist_node)
     graph.add_node("calibrate", calibrate_node)
     graph.add_node("hallucination_check", hallucination_check_node)
 
     graph.set_entry_point("extract_profiles")
     graph.add_edge("extract_profiles", "prefilter")
     graph.add_edge("prefilter", "judge")
-    graph.add_edge("judge", "calibrate")
+    graph.add_edge("judge", "shortlist")
+    graph.add_edge("shortlist", "calibrate")
     graph.add_edge("calibrate", "hallucination_check")
     graph.add_edge("hallucination_check", END)
 

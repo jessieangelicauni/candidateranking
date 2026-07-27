@@ -33,9 +33,19 @@ uv run evidencerank \
   --with-eval-report
 ```
 
-The pipeline prints a `Running stage: <name>` line to stdout as each of the 5 stages
-(`extract_profiles`, `prefilter`, `judge`, `calibrate`, `hallucination_check`) starts,
-so you can follow progress on longer runs.
+The pipeline prints a `Running stage: <name>` line to stdout as each of the 6 stages
+(`extract_profiles`, `prefilter`, `judge`, `shortlist`, `calibrate`, `hallucination_check`)
+starts, so you can follow progress on longer runs.
+
+Only the judge's top 10 candidates by rating proceed to the `calibrate` stage (ties at the
+10th-place boundary are all kept, so the shortlist can be larger than 10 candidates — since
+ratings only range 1-10, a pool with many candidates tied at the top rating can send the
+entire pool to the calibrator; this reduces the calibrator's prompt size in the common case,
+it does not hard-bound it). Everyone judged is still fully recorded in `report.json`'s
+`profiles` and `judge_results`;
+candidates cut before calibration are additionally listed in `report.json`'s `not_shortlisted`
+with the reason `"ranked outside judge's top 10 by rating"`. `report.md`'s ranked table only
+reflects the shortlist that reached calibration.
 
 This produces `report.json` (full evidence trail, including dropped candidates and
 hallucination check results) and `report.md` (a ranked Markdown table).

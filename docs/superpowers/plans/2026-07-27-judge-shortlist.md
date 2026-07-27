@@ -159,14 +159,19 @@ def test_graph_shortlists_top_10_by_rating_before_calibrating(monkeypatch):
     def fake_prefilter_candidate(candidate_id, jd_required_skills, candidate_skills, threshold):
         return PrefilterResult(candidate_id=candidate_id, similarity=0.9, passed=True)
 
-    # Rating descends with candidate index (c0 highest at 20, c11 lowest at
-    # 9) with no ties, so the top 10 by rating is exactly c0..c9.
+    # 12 candidates, ratings capped to the valid 1-10 range (JudgeResult.rating
+    # is Field(ge=1, le=10)): c0-c7 at 10, c8-c9 at 9, c10-c11 at 3. The
+    # cutoff for the top 10 lands cleanly between the rating-9 and rating-3
+    # groups, so the top 10 by rating is exactly c0..c9 with no boundary tie
+    # to resolve here (tie-at-the-boundary behavior is already covered in
+    # isolation by tests/agents/test_shortlist.py from Task 1).
     def fake_judge_candidate(jd_requirements, profile):
         index = int(profile.candidate_id[1:])
+        ratings = [10] * 8 + [9] * 2 + [3] * 2
         return JudgeResult(
             candidate_id=profile.candidate_id,
             tier=Tier.STRONG_FIT,
-            rating=20 - index,
+            rating=ratings[index],
             evidence=[EvidenceClaim(claim="Strong fit", quote="Python")],
         )
 
