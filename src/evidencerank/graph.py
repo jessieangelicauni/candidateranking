@@ -26,7 +26,7 @@ class PipelineState(TypedDict, total=False):
     prefilter_results: dict[str, PrefilterResult]
     dropped: list[dict[str, str]]
     judge_results: dict[str, JudgeResult]
-    shortlisted_ids: set[str]
+    shortlisted_results: dict[str, JudgeResult]
     not_shortlisted: list[dict[str, str]]
     calibrated_results: list[CalibratedResult]
     hallucination_reports: dict[str, HallucinationReport]
@@ -78,19 +78,14 @@ def shortlist_node(state: PipelineState) -> dict:
     click.echo("Running stage: shortlist")
     shortlisted, not_shortlisted = select_shortlist(list(state["judge_results"].values()))
     return {
-        "shortlisted_ids": {result.candidate_id for result in shortlisted},
+        "shortlisted_results": {result.candidate_id: result for result in shortlisted},
         "not_shortlisted": not_shortlisted,
     }
 
 
 def calibrate_node(state: PipelineState) -> dict:
     click.echo("Running stage: calibrate")
-    pool = [
-        result
-        for result in state["judge_results"].values()
-        if result.candidate_id in state["shortlisted_ids"]
-    ]
-    calibrated = calibrate_pool(state["jd"], pool)
+    calibrated = calibrate_pool(state["jd"], list(state["shortlisted_results"].values()))
     return {"calibrated_results": calibrated}
 
 

@@ -12,7 +12,7 @@ def load_rank_map(report_path: str | Path) -> dict[str, int]:
 
 def rank_stability(report_paths: list[str]) -> dict:
     rank_maps = [load_rank_map(path) for path in report_paths]
-    candidate_ids = sorted(set.intersection(*(set(rank_map) for rank_map in rank_maps)))
+    candidate_ids = sorted(set(rank_maps[0]).intersection(*rank_maps[1:]))
     if len(candidate_ids) < 2:
         raise ValueError(
             f"Only {len(candidate_ids)} candidate(s) were shortlisted in every run "

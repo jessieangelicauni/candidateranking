@@ -12,6 +12,22 @@ from evidencerank.models import (
 )
 
 
+def _patch_pipeline_fakes(
+    monkeypatch,
+    *,
+    extract_cv,
+    prefilter_candidate,
+    judge_candidate,
+    calibrate_pool,
+    check_evidence,
+):
+    monkeypatch.setattr("evidencerank.graph.cached_extract_cv", extract_cv)
+    monkeypatch.setattr("evidencerank.graph.prefilter_candidate", prefilter_candidate)
+    monkeypatch.setattr("evidencerank.graph.judge_candidate", judge_candidate)
+    monkeypatch.setattr("evidencerank.graph.calibrate_pool", calibrate_pool)
+    monkeypatch.setattr("evidencerank.graph.check_evidence", check_evidence)
+
+
 def test_graph_runs_extract_prefilter_judge_calibrate_hallucination(monkeypatch):
     jd = JDRequirements(title="ML Engineer", required_skills=["Python", "PyTorch"])
 
@@ -70,11 +86,14 @@ def test_graph_runs_extract_prefilter_judge_calibrate_hallucination(monkeypatch)
         hallucination_calls.append((judge_result.candidate_id, raw_cv_text))
         return HallucinationReport(candidate_id=judge_result.candidate_id, unverified_quotes=[])
 
-    monkeypatch.setattr("evidencerank.graph.cached_extract_cv", fake_extract_cv)
-    monkeypatch.setattr("evidencerank.graph.prefilter_candidate", fake_prefilter_candidate)
-    monkeypatch.setattr("evidencerank.graph.judge_candidate", fake_judge_candidate)
-    monkeypatch.setattr("evidencerank.graph.calibrate_pool", fake_calibrate_pool)
-    monkeypatch.setattr("evidencerank.graph.check_evidence", fake_check_evidence)
+    _patch_pipeline_fakes(
+        monkeypatch,
+        extract_cv=fake_extract_cv,
+        prefilter_candidate=fake_prefilter_candidate,
+        judge_candidate=fake_judge_candidate,
+        calibrate_pool=fake_calibrate_pool,
+        check_evidence=fake_check_evidence,
+    )
 
     graph = build_graph()
     final_state = graph.invoke(
@@ -154,11 +173,14 @@ def test_graph_shortlists_top_10_by_rating_before_calibrating(monkeypatch):
     def fake_check_evidence(judge_result, raw_cv_text, threshold):
         return HallucinationReport(candidate_id=judge_result.candidate_id, unverified_quotes=[])
 
-    monkeypatch.setattr("evidencerank.graph.cached_extract_cv", fake_extract_cv)
-    monkeypatch.setattr("evidencerank.graph.prefilter_candidate", fake_prefilter_candidate)
-    monkeypatch.setattr("evidencerank.graph.judge_candidate", fake_judge_candidate)
-    monkeypatch.setattr("evidencerank.graph.calibrate_pool", fake_calibrate_pool)
-    monkeypatch.setattr("evidencerank.graph.check_evidence", fake_check_evidence)
+    _patch_pipeline_fakes(
+        monkeypatch,
+        extract_cv=fake_extract_cv,
+        prefilter_candidate=fake_prefilter_candidate,
+        judge_candidate=fake_judge_candidate,
+        calibrate_pool=fake_calibrate_pool,
+        check_evidence=fake_check_evidence,
+    )
 
     graph = build_graph()
     final_state = graph.invoke({"jd": jd, "raw_resumes": raw_resumes})
@@ -168,7 +190,7 @@ def test_graph_shortlists_top_10_by_rating_before_calibrating(monkeypatch):
 
     assert len(calibrate_calls) == 1
     assert set(calibrate_calls[0]) == expected_shortlist
-    assert final_state["shortlisted_ids"] == expected_shortlist
+    assert set(final_state["shortlisted_results"].keys()) == expected_shortlist
     assert {entry["candidate_id"] for entry in final_state["not_shortlisted"]} == expected_cut
     assert all(
         entry["reason"] == "ranked outside judge's top 10 by rating"

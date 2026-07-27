@@ -26,10 +26,16 @@ def select_shortlist(
     ranked = sorted(judge_results, key=lambda result: result.rating, reverse=True)
     cutoff_rating = ranked[size - 1].rating
 
-    shortlisted = [result for result in ranked if result.rating >= cutoff_rating]
-    not_shortlisted = [
-        {"candidate_id": result.candidate_id, "reason": f"ranked outside judge's top {size} by rating"}
-        for result in ranked
-        if result.rating < cutoff_rating
-    ]
+    shortlisted: list[JudgeResult] = []
+    not_shortlisted: list[dict[str, str]] = []
+    for result in ranked:
+        if result.rating >= cutoff_rating:
+            shortlisted.append(result)
+        else:
+            not_shortlisted.append(
+                {
+                    "candidate_id": result.candidate_id,
+                    "reason": f"ranked outside judge's top {size} by rating",
+                }
+            )
     return shortlisted, not_shortlisted
