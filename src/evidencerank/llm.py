@@ -20,5 +20,4 @@ def resolve_model_name(stage: str) -> str:
 
 
 def get_chat_model(stage: str, temperature: float = 0.0, num_ctx: int | None = None) -> ChatOllama:
-    kwargs = {} if num_ctx is None else {"num_ctx": num_ctx}
-    return ChatOllama(model=resolve_model_name(stage), temperature=temperature, **kwargs)
+    return ChatOllama(model=resolve_model_name(stage), temperature=temperature, num_ctx=num_ctx)

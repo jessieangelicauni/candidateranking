@@ -30,10 +30,12 @@ def test_get_chat_model_passes_num_ctx_when_given(monkeypatch):
     )
 
 
-def test_get_chat_model_omits_num_ctx_when_not_given(monkeypatch):
+def test_get_chat_model_defaults_num_ctx_to_none(monkeypatch):
     fake_chat_ollama = MagicMock()
     monkeypatch.setattr("evidencerank.llm.ChatOllama", fake_chat_ollama)
 
     get_chat_model("judge")
 
-    fake_chat_ollama.assert_called_once_with(model=DEFAULT_MODELS["judge"], temperature=0.0)
+    fake_chat_ollama.assert_called_once_with(
+        model=DEFAULT_MODELS["judge"], temperature=0.0, num_ctx=None
+    )

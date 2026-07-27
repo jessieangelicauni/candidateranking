@@ -36,9 +36,12 @@ def calibrate_pool(jd: JDRequirements, judge_results: list[JudgeResult]) -> list
     actual_ids = {result.candidate_id for result in output.results}
     if actual_ids != expected_ids:
         missing = sorted(expected_ids - actual_ids)
+        unexpected = sorted(actual_ids - expected_ids)
         raise ValueError(
-            f"Calibrator returned {len(actual_ids)}/{len(expected_ids)} candidates; "
-            f"missing: {missing}. This usually means the candidate pool's prompt "
-            f"exceeded the model's context window (num_ctx={CALIBRATOR_NUM_CTX})."
+            f"Calibrator output doesn't match the input pool of {len(expected_ids)} "
+            f"candidates. Missing: {missing}. Unexpected: {unexpected}. This can happen "
+            f"if the pool's prompt exceeded the model's context window (num_ctx="
+            f"{CALIBRATOR_NUM_CTX}) or if the model substituted a hallucinated ID for "
+            f"one of the given candidate_ids."
         )
     return output.results

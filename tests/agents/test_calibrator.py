@@ -13,6 +13,19 @@ from evidencerank.models import (
 )
 
 
+def _two_judge_results() -> list[JudgeResult]:
+    return [
+        JudgeResult(
+            candidate_id="c1", tier=Tier.STRONG_FIT, rating=9,
+            evidence=[EvidenceClaim(claim="Strong Python background", quote="5 years Python")],
+        ),
+        JudgeResult(
+            candidate_id="c2", tier=Tier.MODERATE_FIT, rating=6,
+            evidence=[EvidenceClaim(claim="Some ML exposure", quote="1 year of ML projects")],
+        ),
+    ]
+
+
 def test_calibrate_pool_returns_ranked_list(monkeypatch):
     expected_output = CalibrationOutput(
         results=[
@@ -33,18 +46,8 @@ def test_calibrate_pool_returns_ranked_list(monkeypatch):
     fake_get_chat_model = MagicMock(return_value=fake_chat_model)
     monkeypatch.setattr("evidencerank.agents.calibrator.get_chat_model", fake_get_chat_model)
     jd = JDRequirements(title="ML Engineer", required_skills=["Python"])
-    judge_results = [
-        JudgeResult(
-            candidate_id="c1", tier=Tier.STRONG_FIT, rating=9,
-            evidence=[EvidenceClaim(claim="Strong Python background", quote="5 years Python")],
-        ),
-        JudgeResult(
-            candidate_id="c2", tier=Tier.MODERATE_FIT, rating=6,
-            evidence=[EvidenceClaim(claim="Some ML exposure", quote="1 year of ML projects")],
-        ),
-    ]
 
-    results = calibrate_pool(jd, judge_results)
+    results = calibrate_pool(jd, _two_judge_results())
 
     assert results == expected_output.results
     fake_get_chat_model.assert_called_once_with("calibrator", num_ctx=CALIBRATOR_NUM_CTX)
@@ -69,16 +72,6 @@ def test_calibrate_pool_raises_when_candidates_missing(monkeypatch):
         lambda stage, **kwargs: fake_chat_model,
     )
     jd = JDRequirements(title="ML Engineer", required_skills=["Python"])
-    judge_results = [
-        JudgeResult(
-            candidate_id="c1", tier=Tier.STRONG_FIT, rating=9,
-            evidence=[EvidenceClaim(claim="Strong Python background", quote="5 years Python")],
-        ),
-        JudgeResult(
-            candidate_id="c2", tier=Tier.MODERATE_FIT, rating=6,
-            evidence=[EvidenceClaim(claim="Some ML exposure", quote="1 year of ML projects")],
-        ),
-    ]
 
     with pytest.raises(ValueError, match="c2"):
-        calibrate_pool(jd, judge_results)
+        calibrate_pool(jd, _two_judge_results())

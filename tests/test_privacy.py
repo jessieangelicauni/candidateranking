@@ -1,5 +1,5 @@
 from evidencerank.models import ContactInfo
-from evidencerank.privacy import redact_identity
+from evidencerank.privacy import detect_probable_name, redact_identity
 
 
 def test_redact_identity_removes_name_email_phone_location():
@@ -33,11 +33,7 @@ def test_redact_identity_handles_empty_contact_fields():
     assert redacted == "Skills: Python, SQL"
 
 
-def test_redact_identity_falls_back_to_header_name_when_extraction_missed_it():
-    # cv_extractor sometimes fails to populate contact.name even though the
-    # resume clearly has the candidate's name as its first line. Without this
-    # fallback, the real name flows unredacted into the "blind" Judge prompt.
-    contact = ContactInfo(email="allison.doyle@yahoo.com")
+def test_detect_probable_name_finds_name_shaped_first_line():
     raw_text = (
         "Allison Doyle\n"
         "DevOps / SRE / MLOps · 9.2 years · Lake Jamesmouth, Japan\n"
@@ -45,10 +41,15 @@ def test_redact_identity_falls_back_to_header_name_when_extraction_missed_it():
         "Professional Profile\nSenior technical leader specializing in devops."
     )
 
-    redacted = redact_identity(raw_text, contact)
+    assert detect_probable_name(raw_text) == "Allison Doyle"
 
-    assert "Allison Doyle" not in redacted
-    assert "[REDACTED NAME]" in redacted
+
+def test_detect_probable_name_returns_none_for_non_name_first_line():
+    assert detect_probable_name("Skills: Python, SQL") is None
+
+
+def test_detect_probable_name_skips_leading_blank_lines():
+    assert detect_probable_name("\n\n  Allison Doyle  \nDevOps Engineer") == "Allison Doyle"
 
 
 def test_redact_identity_redacts_dot_formatted_phone():
