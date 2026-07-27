@@ -78,6 +78,21 @@ def test_build_json_report_defaults_missing_stages_to_empty():
     assert report["not_shortlisted"] == []
 
 
+def test_build_json_report_includes_stage_timings():
+    state = _sample_state()
+    state["stage_timings"] = {"extract_profiles": 1.5, "judge": 3.25}
+
+    report = build_json_report(state)
+
+    assert report["stage_timings"] == {"extract_profiles": 1.5, "judge": 3.25}
+
+
+def test_build_json_report_defaults_missing_stage_timings_to_empty_dict():
+    report = build_json_report(_sample_state())
+
+    assert report["stage_timings"] == {}
+
+
 def test_write_json_report_writes_valid_json(tmp_path):
     out_path = tmp_path / "report.json"
     write_json_report(_sample_state(), out_path)

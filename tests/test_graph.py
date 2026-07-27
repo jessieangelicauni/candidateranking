@@ -148,6 +148,15 @@ def test_graph_runs_extract_prefilter_judge_hallucination_calibrate(monkeypatch)
     for candidate_id in ("strong_a", "strong_b"):
         assert [c.quote for c in final_state["judge_results"][candidate_id].evidence] == ["Python"]
 
+    # Regression guard 5: every stage records a non-negative timing, keyed by
+    # node name, so latency is visible in the eventual report.json.
+    assert set(final_state["stage_timings"].keys()) == {
+        "extract_profiles", "prefilter", "judge", "hallucination_check", "shortlist", "calibrate",
+    }
+    for seconds in final_state["stage_timings"].values():
+        assert isinstance(seconds, float)
+        assert seconds >= 0.0
+
 
 def test_graph_shortlists_top_10_by_rating_before_calibrating(monkeypatch):
     jd = JDRequirements(title="ML Engineer", required_skills=["Python"])

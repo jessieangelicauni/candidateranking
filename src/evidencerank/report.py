@@ -24,6 +24,7 @@ def build_json_report(state: dict) -> dict:
             candidate_id: report.model_dump()
             for candidate_id, report in state.get("hallucination_reports", {}).items()
         },
+        "stage_timings": state.get("stage_timings", {}),
     }
 
 
