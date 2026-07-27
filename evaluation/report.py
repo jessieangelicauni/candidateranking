@@ -122,6 +122,18 @@ def build_eval_markdown_report(report_paths: list[str | Path]) -> str:
         pass_str = f"{m['pass_rate']:.1%}" if m["pass_rate"] is not None else "N/A"
         lines.append(f"| {name} | {m['n']} | {mean_str} | {std_str} | {pass_str} |")
 
+    stage_timings = data.get("stage_timings") or {}
+    if stage_timings:
+        lines += [
+            "",
+            "## Stage Timings",
+            "",
+            "| Stage | Seconds |",
+            "|---|---|",
+        ]
+        for stage_name, seconds in stage_timings.items():
+            lines.append(f"| {stage_name} | {seconds:.3f} |")
+
     if len(report_paths) >= 2:
         stability = rank_stability([str(path) for path in report_paths])
         lines += [

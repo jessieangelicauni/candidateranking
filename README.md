@@ -162,3 +162,8 @@ GEval scores and pipeline stats are always computed from the first `--reports` p
 given; every path is used for rank stability. This requires `ollama serve` running
 locally (same GEval judge model as above) — the GEval calls are not mocked outside
 of tests.
+
+When the underlying `report.json` includes per-stage timing (`stage_timings`,
+added by the production pipeline), the report also includes a "Stage Timings"
+table showing wall-clock seconds per stage — absent for older `report.json`
+files that predate this field.
