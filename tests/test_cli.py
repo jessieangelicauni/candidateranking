@@ -147,6 +147,14 @@ def test_rank_command_without_eval_report_flag_skips_eval_report(tmp_path, monke
 
     out_json = tmp_path / "out.json"
     out_md = tmp_path / "out.md"
+    out_eval_report = tmp_path / "eval_report.md"
+
+    called = []
+    monkeypatch.setattr(
+        "evaluation.report.write_eval_markdown_report",
+        lambda *args, **kwargs: called.append(args),
+    )
+
     runner = CliRunner()
     result = runner.invoke(
         rank,
@@ -155,8 +163,10 @@ def test_rank_command_without_eval_report_flag_skips_eval_report(tmp_path, monke
             "--resumes-dir", str(resumes_dir),
             "--out-json", str(out_json),
             "--out-md", str(out_md),
+            "--out-eval-report", str(out_eval_report),
         ],
     )
 
     assert result.exit_code == 0, result.output
-    assert not (tmp_path / "eval_report.md").exists()
+    assert not out_eval_report.exists()
+    assert called == []
