@@ -12,7 +12,7 @@ from evidencerank.models import (
 )
 
 
-def test_graph_runs_extract_prefilter_judge_calibrate_hallucination(monkeypatch):
+def test_graph_runs_extract_prefilter_judge_hallucination_calibrate(monkeypatch):
     jd = JDRequirements(title="ML Engineer", required_skills=["Python", "PyTorch"])
 
     # NOTE: "weak" is intentionally NOT last here. If hallucination_check_node
@@ -44,7 +44,10 @@ def test_graph_runs_extract_prefilter_judge_calibrate_hallucination(monkeypatch)
             candidate_id=profile.candidate_id,
             tier=Tier.STRONG_FIT,
             rating=9,
-            evidence=[EvidenceClaim(claim="Strong fit", quote="Python")],
+            evidence=[
+                EvidenceClaim(claim="Strong fit", quote="Python"),
+                EvidenceClaim(claim="Fabricated claim", quote="FABRICATED unverifiable quote text"),
+            ],
         )
 
     # Records every call to calibrate_pool so we can assert it is invoked
@@ -63,12 +66,17 @@ def test_graph_runs_extract_prefilter_judge_calibrate_hallucination(monkeypatch)
 
     # Records the (candidate_id, raw_cv_text) pairs check_evidence was called
     # with, so we can assert each candidate was checked against its OWN raw
-    # CV text rather than a mismatched/swapped one.
+    # CV text rather than a mismatched/swapped one. Also flags any evidence
+    # quote starting with "FABRICATED" as unverified, simulating a real
+    # hallucination-checker finding.
     hallucination_calls: list[tuple[str, str]] = []
 
     def fake_check_evidence(judge_result, raw_cv_text, threshold):
         hallucination_calls.append((judge_result.candidate_id, raw_cv_text))
-        return HallucinationReport(candidate_id=judge_result.candidate_id, unverified_quotes=[])
+        unverified = [
+            claim.quote for claim in judge_result.evidence if claim.quote.startswith("FABRICATED")
+        ]
+        return HallucinationReport(candidate_id=judge_result.candidate_id, unverified_quotes=unverified)
 
     monkeypatch.setattr("evidencerank.graph.extract_cv", fake_extract_cv)
     monkeypatch.setattr("evidencerank.graph.prefilter_candidate", fake_prefilter_candidate)
@@ -100,9 +108,23 @@ def test_graph_runs_extract_prefilter_judge_calibrate_hallucination(monkeypatch)
 
     # Regression guard 2: each candidate's hallucination check must be run
     # against its OWN raw CV text, not a swapped/mismatched one.
-    assert final_state["hallucination_reports"]["strong_a"].all_verified is True
-    assert final_state["hallucination_reports"]["strong_b"].all_verified is True
     recorded_raw_text_by_candidate = dict(hallucination_calls)
     assert len(hallucination_calls) == 2
     for candidate_id in ("strong_a", "strong_b"):
         assert recorded_raw_text_by_candidate[candidate_id] == raw_resumes[candidate_id]
+
+    # Regression guard 3: hallucination_reports keeps the ORIGINAL unverified
+    # quote for audit, even though it gets stripped from what calibrate/final
+    # judge_results see.
+    for candidate_id in ("strong_a", "strong_b"):
+        report = final_state["hallucination_reports"][candidate_id]
+        assert report.all_verified is False
+        assert "FABRICATED unverifiable quote text" in report.unverified_quotes
+
+    # Regression guard 4: the fabricated evidence item never reaches
+    # calibrate_pool or the final judge_results — only the verified "Python"
+    # quote survives, proving filtering happens BEFORE calibration.
+    for r in pooled_judge_results:
+        assert [c.quote for c in r.evidence] == ["Python"]
+    for candidate_id in ("strong_a", "strong_b"):
+        assert [c.quote for c in final_state["judge_results"][candidate_id].evidence] == ["Python"]

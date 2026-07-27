@@ -1,4 +1,4 @@
-from evidencerank.agents.hallucination_checker import check_evidence
+from evidencerank.agents.hallucination_checker import check_evidence, filter_verified_evidence
 from evidencerank.models import EvidenceClaim, JudgeResult, Tier
 
 RAW_CV_TEXT = "Daniel Taylor\nSkills: Python, Machine Learning\n5 years of Python experience"
@@ -53,3 +53,37 @@ def test_check_evidence_verifies_quote_despite_whitespace_differences():
     report = check_evidence(judge_result, raw_cv_text)
 
     assert report.all_verified is True
+
+
+def test_filter_verified_evidence_removes_only_unverified_claims():
+    judge_result = JudgeResult(
+        candidate_id="c1",
+        tier=Tier.STRONG_FIT,
+        rating=8,
+        evidence=[
+            EvidenceClaim(claim="Has Python experience", quote="5 years of Python experience"),
+            EvidenceClaim(claim="Led a team", quote="managed a team of 10 engineers"),
+        ],
+    )
+    report = check_evidence(judge_result, RAW_CV_TEXT)
+
+    filtered = filter_verified_evidence(judge_result, report)
+
+    assert [claim.quote for claim in filtered.evidence] == ["5 years of Python experience"]
+    assert filtered.candidate_id == "c1"
+    assert filtered.tier == Tier.STRONG_FIT
+    assert filtered.rating == 8
+
+
+def test_filter_verified_evidence_keeps_all_claims_when_fully_verified():
+    judge_result = JudgeResult(
+        candidate_id="c1",
+        tier=Tier.STRONG_FIT,
+        rating=8,
+        evidence=[EvidenceClaim(claim="Has Python experience", quote="5 years of Python experience")],
+    )
+    report = check_evidence(judge_result, RAW_CV_TEXT)
+
+    filtered = filter_verified_evidence(judge_result, report)
+
+    assert filtered.evidence == judge_result.evidence

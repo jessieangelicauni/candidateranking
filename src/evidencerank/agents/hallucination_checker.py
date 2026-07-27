@@ -26,3 +26,11 @@ def check_evidence(
         if score < threshold:
             unverified.append(claim.quote)
     return HallucinationReport(candidate_id=judge_result.candidate_id, unverified_quotes=unverified)
+
+
+def filter_verified_evidence(judge_result: JudgeResult, report: HallucinationReport) -> JudgeResult:
+    unverified_quotes = set(report.unverified_quotes)
+    verified_evidence = [
+        claim for claim in judge_result.evidence if claim.quote not in unverified_quotes
+    ]
+    return judge_result.model_copy(update={"evidence": verified_evidence})

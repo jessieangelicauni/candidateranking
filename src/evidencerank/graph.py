@@ -5,7 +5,11 @@ from langgraph.graph import END, StateGraph
 
 from evidencerank.agents.calibrator import calibrate_pool
 from evidencerank.agents.cv_extractor import extract_cv
-from evidencerank.agents.hallucination_checker import DEFAULT_THRESHOLD, check_evidence
+from evidencerank.agents.hallucination_checker import (
+    DEFAULT_THRESHOLD,
+    check_evidence,
+    filter_verified_evidence,
+)
 from evidencerank.agents.judge import judge_candidate
 from evidencerank.agents.prefilter import prefilter_candidate
 from evidencerank.models import (
@@ -81,10 +85,13 @@ def hallucination_check_node(state: PipelineState) -> dict:
     click.echo("Running stage: hallucination_check")
     threshold = state.get("hallucination_threshold", DEFAULT_THRESHOLD)
     reports = {}
+    filtered_judge_results = {}
     for candidate_id, judge_result in state["judge_results"].items():
         raw_text = state["profiles"][candidate_id].raw_cv_text
-        reports[candidate_id] = check_evidence(judge_result, raw_text, threshold=threshold)
-    return {"hallucination_reports": reports}
+        report = check_evidence(judge_result, raw_text, threshold=threshold)
+        reports[candidate_id] = report
+        filtered_judge_results[candidate_id] = filter_verified_evidence(judge_result, report)
+    return {"hallucination_reports": reports, "judge_results": filtered_judge_results}
 
 
 def build_graph():
@@ -98,8 +105,8 @@ def build_graph():
     graph.set_entry_point("extract_profiles")
     graph.add_edge("extract_profiles", "prefilter")
     graph.add_edge("prefilter", "judge")
-    graph.add_edge("judge", "calibrate")
-    graph.add_edge("calibrate", "hallucination_check")
-    graph.add_edge("hallucination_check", END)
+    graph.add_edge("judge", "hallucination_check")
+    graph.add_edge("hallucination_check", "calibrate")
+    graph.add_edge("calibrate", END)
 
     return graph.compile()
