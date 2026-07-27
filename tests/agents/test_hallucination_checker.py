@@ -75,6 +75,25 @@ def test_filter_verified_evidence_removes_only_unverified_claims():
     assert filtered.rating == 8
 
 
+def test_filter_verified_evidence_returns_empty_list_when_all_unverified():
+    judge_result = JudgeResult(
+        candidate_id="c1",
+        tier=Tier.STRONG_FIT,
+        rating=8,
+        evidence=[
+            EvidenceClaim(claim="Fabricated one", quote="totally fabricated quote one"),
+            EvidenceClaim(claim="Fabricated two", quote="totally fabricated quote two"),
+        ],
+    )
+    report = check_evidence(judge_result, RAW_CV_TEXT)
+
+    filtered = filter_verified_evidence(judge_result, report)
+
+    assert filtered.evidence == []
+    assert filtered.candidate_id == "c1"
+    assert filtered.tier == Tier.STRONG_FIT
+
+
 def test_filter_verified_evidence_keeps_all_claims_when_fully_verified():
     judge_result = JudgeResult(
         candidate_id="c1",
