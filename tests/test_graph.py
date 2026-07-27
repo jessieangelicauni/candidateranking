@@ -70,7 +70,7 @@ def test_graph_runs_extract_prefilter_judge_calibrate_hallucination(monkeypatch)
         hallucination_calls.append((judge_result.candidate_id, raw_cv_text))
         return HallucinationReport(candidate_id=judge_result.candidate_id, unverified_quotes=[])
 
-    monkeypatch.setattr("evidencerank.graph.extract_cv", fake_extract_cv)
+    monkeypatch.setattr("evidencerank.graph.cached_extract_cv", fake_extract_cv)
     monkeypatch.setattr("evidencerank.graph.prefilter_candidate", fake_prefilter_candidate)
     monkeypatch.setattr("evidencerank.graph.judge_candidate", fake_judge_candidate)
     monkeypatch.setattr("evidencerank.graph.calibrate_pool", fake_calibrate_pool)

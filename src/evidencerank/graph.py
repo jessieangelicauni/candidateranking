@@ -4,7 +4,7 @@ import click
 from langgraph.graph import END, StateGraph
 
 from evidencerank.agents.calibrator import calibrate_pool
-from evidencerank.agents.cv_extractor import extract_cv
+from evidencerank.agents.cv_extractor import cached_extract_cv
 from evidencerank.agents.hallucination_checker import DEFAULT_THRESHOLD, check_evidence
 from evidencerank.agents.judge import judge_candidate
 from evidencerank.agents.prefilter import prefilter_candidate
@@ -34,7 +34,7 @@ class PipelineState(TypedDict, total=False):
 def extract_profiles_node(state: PipelineState) -> dict:
     click.echo("Running stage: extract_profiles")
     profiles = {
-        candidate_id: extract_cv(candidate_id, raw_text)
+        candidate_id: cached_extract_cv(candidate_id, raw_text)
         for candidate_id, raw_text in state["raw_resumes"].items()
     }
     return {"profiles": profiles}

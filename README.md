@@ -39,6 +39,13 @@ so you can follow progress on longer runs.
 This produces `report.json` (full evidence trail, including dropped candidates and
 hallucination check results) and `report.md` (a ranked Markdown table).
 
+Extracted candidate profiles are cached at `.cache/evidencerank/extract_profiles/`,
+keyed by a hash of the resume text plus the CV-extractor prompt and model — so
+re-running the pipeline against the same resumes skips re-extracting a profile
+whose inputs haven't changed. Editing the extractor prompt or switching the
+`EVIDENCERANK_MODEL_CV_EXTRACTOR` model automatically invalidates the relevant
+cache entries; deleting the directory forces full re-extraction.
+
 Two thresholds are tunable: `--prefilter-threshold` (default `0.5`) sets the minimum
 cosine similarity between the JD's required skills and a candidate's skills to survive
 the embedding pre-filter; `--hallucination-threshold` (default `85.0`) sets the minimum
