@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 from evidencerank.cache import compute_cache_key, load_cached_json, save_cached_json
@@ -30,7 +31,12 @@ def cached_extract_cv(
     cv_text: str,
     cache_dir: Path = DEFAULT_CACHE_DIR,
 ) -> CandidateProfile:
-    key = compute_cache_key(cv_text, CV_EXTRACTOR_PROMPT, resolve_model_name("cv_extractor"))
+    key = compute_cache_key(
+        cv_text,
+        CV_EXTRACTOR_PROMPT,
+        resolve_model_name("cv_extractor"),
+        json.dumps(ExtractedProfileFields.model_json_schema(), sort_keys=True),
+    )
     cached = load_cached_json(cache_dir, key)
     if cached is not None:
         return CandidateProfile(candidate_id=candidate_id, raw_cv_text=cv_text, **cached)

@@ -45,3 +45,12 @@ def test_save_cached_json_creates_cache_dir_if_missing(tmp_path):
     save_cached_json(cache_dir, "some-key", {"a": 1})
 
     assert (cache_dir / "some-key.json").exists()
+
+
+def test_load_cached_json_returns_none_for_corrupt_file(tmp_path):
+    path = tmp_path / "some-key.json"
+    path.write_text("{not valid json", encoding="utf-8")
+
+    result = load_cached_json(tmp_path, "some-key")
+
+    assert result is None

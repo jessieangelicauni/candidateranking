@@ -15,7 +15,10 @@ def load_cached_json(cache_dir: Path, key: str) -> dict | None:
     path = cache_dir / f"{key}.json"
     if not path.exists():
         return None
-    return json.loads(path.read_text(encoding="utf-8"))
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        return None
 
 
 def save_cached_json(cache_dir: Path, key: str, data: dict) -> None:

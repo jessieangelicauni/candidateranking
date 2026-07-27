@@ -39,7 +39,12 @@ def test_cached_extract_cv_skips_llm_on_cache_hit(tmp_path, monkeypatch):
         "education": [],
         "projects": [],
     }
-    key = compute_cache_key(cv_text, CV_EXTRACTOR_PROMPT, resolve_model_name("cv_extractor"))
+    key = compute_cache_key(
+        cv_text,
+        CV_EXTRACTOR_PROMPT,
+        resolve_model_name("cv_extractor"),
+        json.dumps(ExtractedProfileFields.model_json_schema(), sort_keys=True),
+    )
     save_cached_json(tmp_path, key, cached_fields)
 
     fake_chat_model = MagicMock()
@@ -78,7 +83,12 @@ def test_cached_extract_cv_calls_llm_and_writes_cache_on_miss(tmp_path, monkeypa
     assert profile.skills == ["Go", "Rust"]
     fake_chat_model.with_structured_output.assert_called_once_with(ExtractedProfileFields)
 
-    key = compute_cache_key(cv_text, CV_EXTRACTOR_PROMPT, resolve_model_name("cv_extractor"))
+    key = compute_cache_key(
+        cv_text,
+        CV_EXTRACTOR_PROMPT,
+        resolve_model_name("cv_extractor"),
+        json.dumps(ExtractedProfileFields.model_json_schema(), sort_keys=True),
+    )
     cache_file = tmp_path / f"{key}.json"
     assert cache_file.exists()
     cached_data = json.loads(cache_file.read_text(encoding="utf-8"))
