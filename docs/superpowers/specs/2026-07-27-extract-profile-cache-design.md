@@ -97,6 +97,44 @@ LLM computed. `.cache/` is added to `.gitignore`.
    extractor prompt/model, and that deleting the directory (or changing
    either input) forces re-extraction.
 
+## Amendment (post-implementation review)
+
+The final whole-branch review empirically verified the cache end-to-end and
+found three gaps not visible from any single task's diff. Fixed as follows:
+
+1. **Schema drift wasn't covered by the key.** The three-part key (above)
+   covers `cv_text`, the prompt, and the model — but not the shape of
+   `ExtractedProfileFields` itself, which is just as much part of the LLM's
+   contract (it's passed to `with_structured_output`). A schema change
+   (e.g. a new field) let stale cache entries either silently produce
+   profiles missing the new data (new optional field) or crash on every hit
+   (new required field), with no documented recovery. **Fixed:** the cache
+   key gains a fourth part — a hash of `ExtractedProfileFields.model_json_schema()`
+   — so any schema change self-invalidates the same way a prompt or model
+   change does. This supersedes the "three parts" wording above; the key is
+   now four parts: `cv_text`, `CV_EXTRACTOR_PROMPT`, resolved model name,
+   and the schema hash.
+
+2. **A corrupt/truncated cache file permanently broke the pipeline.**
+   `load_cached_json` called `json.loads` with no handling for a
+   partially-written file (e.g. from a process killed mid-write) — every
+   subsequent run failed identically on the same file until a human found
+   and deleted it. **Fixed:** `load_cached_json` treats `JSONDecodeError`/
+   `UnicodeDecodeError` the same as a missing file (returns `None`), so a
+   corrupt entry degrades to a cache miss and self-heals via the normal
+   miss path (re-extract, overwrite).
+
+3. **The cache is an undocumented second store of unredacted candidate
+   PII.** The cached payload includes `contact` (name, email, phone,
+   location) — exactly the field set the Judge is deliberately blinded to
+   — persisted indefinitely in `.cache/`, unlike `report.json` which the
+   README already flags as sensitive. **Fixed:** the README's existing
+   privacy note (about `report.json` holding unredacted identity data) is
+   extended to name `.cache/evidencerank/extract_profiles/` as a second
+   location holding unredacted contact data, not covered by the Judge's
+   redaction. The README also now notes the cache path is relative to the
+   directory `evidencerank` is invoked from.
+
 ## Out of scope
 
 - Caching `judge`, `calibrate`, `prefilter`, or `hallucination_check` — not
