@@ -68,3 +68,95 @@ def test_rank_command_writes_json_and_markdown_reports(tmp_path, monkeypatch):
     assert "candidate1" in invoked_state["raw_resumes"]
     assert invoked_state["prefilter_threshold"] == 0.7
     assert invoked_state["hallucination_threshold"] == 90.0
+
+
+def test_rank_command_with_eval_report_flag_writes_eval_report(tmp_path, monkeypatch):
+    jd_path = tmp_path / "jd.txt"
+    jd_path.write_text("Machine Learning Engineer\nPython required", encoding="utf-8")
+    resumes_dir = tmp_path / "resumes"
+    resumes_dir.mkdir()
+    _make_pdf(resumes_dir / "candidate1.pdf", "Candidate One\nPython, PyTorch")
+
+    fake_jd = JDRequirements(title="ML Engineer", required_skills=["Python"])
+    monkeypatch.setattr("evidencerank.cli.parse_jd", lambda jd_text: fake_jd)
+
+    fake_final_state = {
+        "jd": fake_jd,
+        "dropped": [],
+        "judge_results": {},
+        "calibrated_results": [
+            CalibratedResult(
+                candidate_id="candidate1", final_rank=1, tier=Tier.STRONG_FIT,
+                rating=9, calibration_notes="Only candidate",
+            )
+        ],
+        "hallucination_reports": {},
+    }
+    fake_graph = MagicMock()
+    fake_graph.invoke.return_value = fake_final_state
+    monkeypatch.setattr("evidencerank.cli.build_graph", lambda: fake_graph)
+
+    out_json = tmp_path / "out.json"
+    out_md = tmp_path / "out.md"
+    out_eval_report = tmp_path / "eval_report.md"
+    runner = CliRunner()
+    result = runner.invoke(
+        rank,
+        [
+            "--jd", str(jd_path),
+            "--resumes-dir", str(resumes_dir),
+            "--out-json", str(out_json),
+            "--out-md", str(out_md),
+            "--with-eval-report",
+            "--out-eval-report", str(out_eval_report),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert out_eval_report.exists()
+    content = out_eval_report.read_text(encoding="utf-8")
+    assert "## Pipeline Stats" in content
+    assert "## GEval Metrics" in content
+
+
+def test_rank_command_without_eval_report_flag_skips_eval_report(tmp_path, monkeypatch):
+    jd_path = tmp_path / "jd.txt"
+    jd_path.write_text("Machine Learning Engineer\nPython required", encoding="utf-8")
+    resumes_dir = tmp_path / "resumes"
+    resumes_dir.mkdir()
+    _make_pdf(resumes_dir / "candidate1.pdf", "Candidate One\nPython, PyTorch")
+
+    fake_jd = JDRequirements(title="ML Engineer", required_skills=["Python"])
+    monkeypatch.setattr("evidencerank.cli.parse_jd", lambda jd_text: fake_jd)
+
+    fake_final_state = {
+        "jd": fake_jd,
+        "dropped": [],
+        "judge_results": {},
+        "calibrated_results": [
+            CalibratedResult(
+                candidate_id="candidate1", final_rank=1, tier=Tier.STRONG_FIT,
+                rating=9, calibration_notes="Only candidate",
+            )
+        ],
+        "hallucination_reports": {},
+    }
+    fake_graph = MagicMock()
+    fake_graph.invoke.return_value = fake_final_state
+    monkeypatch.setattr("evidencerank.cli.build_graph", lambda: fake_graph)
+
+    out_json = tmp_path / "out.json"
+    out_md = tmp_path / "out.md"
+    runner = CliRunner()
+    result = runner.invoke(
+        rank,
+        [
+            "--jd", str(jd_path),
+            "--resumes-dir", str(resumes_dir),
+            "--out-json", str(out_json),
+            "--out-md", str(out_md),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert not (tmp_path / "eval_report.md").exists()

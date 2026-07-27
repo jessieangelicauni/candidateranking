@@ -18,7 +18,18 @@ load_dotenv()
 @click.option("--out-md", default="report.md", type=click.Path())
 @click.option("--prefilter-threshold", default=0.5, type=float)
 @click.option("--hallucination-threshold", default=85.0, type=float)
-def rank(jd_path, resumes_dir, out_json, out_md, prefilter_threshold, hallucination_threshold):
+@click.option("--with-eval-report", is_flag=True, default=False)
+@click.option("--out-eval-report", default="eval_report.md", type=click.Path())
+def rank(
+    jd_path,
+    resumes_dir,
+    out_json,
+    out_md,
+    prefilter_threshold,
+    hallucination_threshold,
+    with_eval_report,
+    out_eval_report,
+):
     """Rank every resume in RESUMES_DIR against the job description at JD."""
     jd_text = load_text_file(jd_path)
     jd_requirements = parse_jd(jd_text)
@@ -41,6 +52,12 @@ def rank(jd_path, resumes_dir, out_json, out_md, prefilter_threshold, hallucinat
     write_json_report(final_state, out_json)
     write_markdown_report(final_state, out_md)
     click.echo(f"Wrote {out_json} and {out_md}")
+
+    if with_eval_report:
+        from evaluation.report import write_eval_markdown_report
+
+        write_eval_markdown_report([out_json], out_eval_report)
+        click.echo(f"Wrote {out_eval_report}")
 
 
 if __name__ == "__main__":

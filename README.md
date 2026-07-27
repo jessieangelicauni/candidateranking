@@ -42,6 +42,12 @@ audit-trail artifact. It is not the same view the Judge model sees (that input i
 redacted for blind evaluation; see the design spec's Fairness section). Don't treat or
 share `report.json` as if it were already anonymized.
 
+Pass `--with-eval-report` to also generate the evaluation metric report
+(`eval_report.md` by default, override with `--out-eval-report`) in the same run — see
+[Evaluation metric report](#evaluation-metric-report) below for what it contains. This
+requires `ollama serve` running locally with the eval judge model available (same as the
+standalone `evidencerank-eval-report` command).
+
 ## Model configuration
 
 Override any stage's model with an environment variable:
@@ -89,4 +95,23 @@ different `--out-json` paths, then:
 from evaluation.rank_stability import rank_stability
 print(rank_stability(["run1.json", "run2.json", "run3.json"]))
 ```
-# candidateranking
+
+## Evaluation metric report
+
+Generate a summary report with pipeline stats and GEval metrics:
+
+```bash
+evidencerank-eval-report --reports report.json --out eval_report.md
+```
+
+If you're evaluating a single run right after producing it, `evidencerank rank
+--with-eval-report` (see [Running the pipeline](#running-the-pipeline) above) does this in
+one command instead of two.
+
+Pass `--reports` once per report path. One path gives GEval metrics +
+pipeline stats only; repeat `--reports` for each additional run to also
+include rank stability across runs:
+
+```bash
+evidencerank-eval-report --reports run1.json --reports run2.json --out eval_report.md
+```
