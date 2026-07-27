@@ -84,10 +84,13 @@ def test_write_json_report_writes_valid_json(tmp_path):
 def test_build_markdown_report_has_ranked_table_row():
     markdown = build_markdown_report(_sample_state())
 
-    assert "| Rank | Candidate | Tier | Rating | Key Evidence | Calibration Notes |" in markdown
+    assert (
+        "| Rank | Candidate | Tier | Rating | Key Evidence | Hallucination Flags "
+        "| Calibration Notes |" in markdown
+    )
     assert (
         "| 1 | strong | Strong Fit | 9 | Strong Python background: 5 years Python "
-        "| Only surviving candidate |" in markdown
+        "| — | Only surviving candidate |" in markdown
     )
 
 
@@ -122,9 +125,9 @@ def test_build_markdown_report_orders_rows_by_rank_ascending():
     candidate_order = [line.split("|")[2].strip() for line in row_lines]
 
     assert candidate_order == ["first", "second", "third"]
-    assert lines.index("| 1 | first | Strong Fit | 9 |  | Ranked first |") < \
-        lines.index("| 2 | second | Moderate Fit | 6 |  | Ranked second |") < \
-        lines.index("| 3 | third | Weak Fit | 4 |  | Ranked third |")
+    assert lines.index("| 1 | first | Strong Fit | 9 |  | — | Ranked first |") < \
+        lines.index("| 2 | second | Moderate Fit | 6 |  | — | Ranked second |") < \
+        lines.index("| 3 | third | Weak Fit | 4 |  | — | Ranked third |")
 
 
 def test_build_markdown_report_escapes_pipes_and_newlines_in_notes():
@@ -151,11 +154,11 @@ def test_build_markdown_report_escapes_pipes_and_newlines_in_notes():
     assert "Great fit \\| but watch out for gaps in employment" in data_row
     assert "Great fit | but" not in data_row
 
-    # Exactly 6 well-formed columns: splitting on the escaped-pipe-protected row
-    # (only unescaped pipes act as separators) yields the 6 data fields plus the
+    # Exactly 7 well-formed columns: splitting on the escaped-pipe-protected row
+    # (only unescaped pipes act as separators) yields the 7 data fields plus the
     # two empty strings from the leading/trailing pipe.
     unescaped_split = data_row.replace("\\|", "").split("|")
-    assert len(unescaped_split) == 8  # "", rank, candidate, tier, rating, evidence, notes, ""
+    assert len(unescaped_split) == 9  # "", rank, candidate, tier, rating, evidence, flags, notes, ""
 
 
 def test_build_markdown_report_escapes_pipes_and_newlines_in_evidence():
@@ -186,6 +189,29 @@ def test_build_markdown_report_escapes_pipes_and_newlines_in_evidence():
     assert "Shipped feature: Delivered on time" in data_row
     assert "Managed 5 | 10 person" not in data_row
 
-    # Exactly 6 well-formed columns: only unescaped pipes act as separators.
+    # Exactly 7 well-formed columns: only unescaped pipes act as separators.
     unescaped_split = data_row.replace("\\|", "").split("|")
-    assert len(unescaped_split) == 8  # "", rank, candidate, tier, rating, evidence, notes, ""
+    assert len(unescaped_split) == 9  # "", rank, candidate, tier, rating, evidence, flags, notes, ""
+
+
+def test_build_markdown_report_shows_removed_count_for_flagged_candidate():
+    state = _sample_state()
+    state["hallucination_reports"] = {
+        "strong": HallucinationReport(
+            candidate_id="strong",
+            unverified_quotes=["fabricated quote one", "fabricated quote two"],
+        ),
+    }
+
+    markdown = build_markdown_report(state)
+
+    assert "| 2 removed |" in markdown
+
+
+def test_build_markdown_report_shows_dash_when_no_hallucination_report_present():
+    state = _sample_state()
+    state["hallucination_reports"] = {}
+
+    markdown = build_markdown_report(state)
+
+    assert "| — |" in markdown
