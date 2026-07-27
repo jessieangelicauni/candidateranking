@@ -2,7 +2,10 @@
 
 Evidence-grounded multi-agent LLM pipeline for ranking IT job candidates against a job
 description, using local Ollama models orchestrated with LangGraph. See
-`docs/superpowers/specs/2026-07-24-evidencerank-design.md` for the full design.
+`docs/superpowers/specs/2026-07-24-evidencerank-design.md` for the full design, and
+`docs/superpowers/specs/2026-07-27-eval-metric-report-design.md` /
+`docs/superpowers/specs/2026-07-27-eval-report-cli-integration-design.md` for the
+evaluation-report tooling described below.
 
 ## Setup
 
@@ -35,6 +38,12 @@ so you can follow progress on longer runs.
 
 This produces `report.json` (full evidence trail, including dropped candidates and
 hallucination check results) and `report.md` (a ranked Markdown table).
+
+Two thresholds are tunable: `--prefilter-threshold` (default `0.5`) sets the minimum
+cosine similarity between the JD's required skills and a candidate's skills to survive
+the embedding pre-filter; `--hallucination-threshold` (default `85.0`) sets the minimum
+fuzzy-match score for a quoted piece of evidence to count as verified against the
+candidate's raw CV text.
 
 **Note:** `report.json`'s `profiles` section contains unredacted candidate identity
 data (name, email, phone, location, raw CV text) — this is an intentional full
