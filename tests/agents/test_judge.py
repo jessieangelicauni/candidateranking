@@ -103,3 +103,50 @@ def test_judge_candidate_redacts_identity_in_structured_free_text_fields(monkeyp
     assert "daniel.taylor@protonmail.com" not in prompt_sent
     assert "Contact: [REDACTED NAME], [REDACTED EMAIL]" in prompt_sent
     assert "[REDACTED EMAIL] for details." in prompt_sent
+
+
+def test_judge_candidate_prompt_scopes_quoting_to_resume_text_only(monkeypatch):
+    verdict = JudgeVerdict(
+        tier=Tier.STRONG_FIT,
+        rating=8,
+        evidence=[EvidenceClaim(claim="Has Python experience", quote="5 years of Python experience")],
+    )
+    fake_structured_model = MagicMock()
+    fake_structured_model.invoke.return_value = verdict
+    fake_chat_model = MagicMock()
+    fake_chat_model.with_structured_output.return_value = fake_structured_model
+    monkeypatch.setattr(
+        "evidencerank.agents.judge.get_chat_model",
+        lambda stage: fake_chat_model,
+    )
+    jd = JDRequirements(title="ML Engineer", required_skills=["Python"])
+
+    judge_candidate(jd, _make_profile())
+
+    prompt_sent = fake_structured_model.invoke.call_args[0][0]
+    assert "ONLY from that block" in prompt_sent
+    assert 'Never quote the "Candidate structured profile" section' in prompt_sent
+    assert "background context only — do not quote from this section" in prompt_sent
+
+
+def test_judge_candidate_prompt_requires_claim_relevant_quotes(monkeypatch):
+    verdict = JudgeVerdict(
+        tier=Tier.STRONG_FIT,
+        rating=8,
+        evidence=[EvidenceClaim(claim="Has Python experience", quote="5 years of Python experience")],
+    )
+    fake_structured_model = MagicMock()
+    fake_structured_model.invoke.return_value = verdict
+    fake_chat_model = MagicMock()
+    fake_chat_model.with_structured_output.return_value = fake_structured_model
+    monkeypatch.setattr(
+        "evidencerank.agents.judge.get_chat_model",
+        lambda stage: fake_chat_model,
+    )
+    jd = JDRequirements(title="ML Engineer", required_skills=["Python"])
+
+    judge_candidate(jd, _make_profile())
+
+    prompt_sent = fake_structured_model.invoke.call_args[0][0]
+    assert "directly demonstrate the specific skill, technology, or responsibility" in prompt_sent
+    assert "results-driven engineer with 4+ years of experience" in prompt_sent

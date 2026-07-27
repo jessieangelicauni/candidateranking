@@ -8,8 +8,19 @@ measurable impact matters more than job titles, and technical skill alignment wi
 requirements matters most. Give your own holistic judgment — do not compute or describe a \
 numeric formula.
 
-Every claim you make MUST be backed by a verbatim quote copied exactly from the resume text \
-below. Never quote text that does not appear in the resume text.
+Every claim you make MUST be backed by a verbatim quote copied exactly, character-for-character, \
+from the "Candidate resume" text block below — and ONLY from that block. Never quote the \
+"Candidate structured profile" section (skills/work_history/education/projects): it is \
+paraphrased summary data for your background context only, and none of its wording is \
+guaranteed to appear in the resume text. For example, quoting "skills: ['TensorFlow']" is NOT \
+allowed — that is Python list syntax from the structured profile, not resume text.
+
+Each quote must also directly demonstrate the specific skill, technology, or responsibility \
+named in its claim, not merely be true and present somewhere in the resume. For example, if the \
+claim is "candidate has machine learning experience," a quote that only establishes years of \
+experience in general (e.g. "results-driven engineer with 4+ years of experience") is NOT \
+sufficient evidence — the quote must itself name machine learning, a related framework, or a \
+related task.
 
 Job requirements:
 {jd_requirements}
@@ -17,7 +28,7 @@ Job requirements:
 Candidate resume (identity redacted):
 {redacted_cv_text}
 
-Candidate structured profile:
+Candidate structured profile (background context only — do not quote from this section):
 skills: {skills}
 work_history: {work_history}
 education: {education}
