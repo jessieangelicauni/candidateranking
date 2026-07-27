@@ -33,6 +33,24 @@ def test_redact_identity_handles_empty_contact_fields():
     assert redacted == "Skills: Python, SQL"
 
 
+def test_redact_identity_falls_back_to_header_name_when_extraction_missed_it():
+    # cv_extractor sometimes fails to populate contact.name even though the
+    # resume clearly has the candidate's name as its first line. Without this
+    # fallback, the real name flows unredacted into the "blind" Judge prompt.
+    contact = ContactInfo(email="allison.doyle@yahoo.com")
+    raw_text = (
+        "Allison Doyle\n"
+        "DevOps / SRE / MLOps · 9.2 years · Lake Jamesmouth, Japan\n"
+        "allison.doyle@yahoo.com · 563-542-1607x33754\n"
+        "Professional Profile\nSenior technical leader specializing in devops."
+    )
+
+    redacted = redact_identity(raw_text, contact)
+
+    assert "Allison Doyle" not in redacted
+    assert "[REDACTED NAME]" in redacted
+
+
 def test_redact_identity_redacts_dot_formatted_phone():
     contact = ContactInfo(name="Jane Doe", phone="555.123.4567")
     raw_text = "Contact: 555.123.4567"
