@@ -7,3 +7,4 @@ report.md
 *.egg-info/
 .env
 .claude/
+.superpowers/
