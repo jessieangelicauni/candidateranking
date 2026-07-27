@@ -34,3 +34,22 @@ def test_check_evidence_flags_fabricated_quote():
     assert report.all_verified is False
     assert "managed a team of 10 engineers" in report.unverified_quotes
     assert "5 years of Python experience" not in report.unverified_quotes
+
+
+def test_check_evidence_verifies_quote_despite_whitespace_differences():
+    raw_cv_text = "Reduced latency by 40%"
+    judge_result = JudgeResult(
+        candidate_id="c1",
+        tier=Tier.STRONG_FIT,
+        rating=8,
+        evidence=[
+            EvidenceClaim(
+                claim="Reduced latency",
+                quote="Reduced\n\n\nlatency\n\n\nby\n\n\n40%",
+            )
+        ],
+    )
+
+    report = check_evidence(judge_result, raw_cv_text)
+
+    assert report.all_verified is True
