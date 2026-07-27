@@ -112,8 +112,9 @@ past `report.json`.
 
 1. User runs the production pipeline one or more times (`uv run evidencerank ...`), producing
    `report.json` per run.
-2. User runs `uv run evidencerank-eval-report --reports report1.json [report2.json ...] --out
-   eval_report.md`.
+2. User runs `uv run evidencerank-eval-report --reports report1.json --reports report2.json
+   --out eval_report.md` (repeat `--reports` once per report path — one path gives GEval
+   metrics + pipeline stats only; 2+ paths also add rank stability).
 3. `report.py` loads the primary report, builds GEval test cases from `judge_results` +
    `profiles` + `jd`, and calls the three GEval metrics — each metric call round-trips to the
    local Ollama judge model (`EVIDENCERANK_EVAL_MODEL`, same as production judge stage).
