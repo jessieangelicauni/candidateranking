@@ -29,7 +29,8 @@ uv run evidencerank \
   --jd machine_learning_engineer.txt \
   --resumes-dir resumes \
   --out-json report.json \
-  --out-md report.md
+  --out-md report.md \
+  --with-eval-report
 ```
 
 The pipeline prints a `Running stage: <name>` line to stdout as each of the 5 stages
