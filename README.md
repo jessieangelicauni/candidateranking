@@ -77,6 +77,9 @@ The `evaluation/` package is separate from the production pipeline (`src/evidenc
   EvidenceRelevancy) to run against pipeline output.
 - `evaluation/rank_stability.py` — computes Spearman/Kendall-tau rank correlation across
   repeated runs on the same input, to report LLM judgment consistency.
+- `evaluation/report.py` — aggregates the above (plus pipeline stats: candidates
+  submitted, pre-filter pass/drop, hallucination flags) into a single Markdown
+  evaluation report, suitable for a paper appendix.
 
 The three `GEval` metrics in `evaluation/metrics.py` use a local Ollama model as the
 judge (`EVIDENCERANK_EVAL_MODEL`, see [Environment variables](#environment-variables)),
@@ -89,4 +92,28 @@ different `--out-json` paths, then:
 from evaluation.rank_stability import rank_stability
 print(rank_stability(["run1.json", "run2.json", "run3.json"]))
 ```
+
+### Evaluation metric report
+
+`uv run evidencerank-eval-report` builds a Markdown report combining GEval metric
+aggregates, pipeline stats, and (when 2+ runs are given) rank stability, from one or
+more existing `report.json` files:
+
+```bash
+uv run evidencerank-eval-report --reports report.json --out eval_report.md
+```
+
+Pass `--reports` once per report path — repeat it for each additional run to also
+include rank stability across runs:
+
+```bash
+uv run evidencerank-eval-report \
+  --reports run1.json --reports run2.json --reports run3.json \
+  --out eval_report.md
+```
+
+GEval scores and pipeline stats are always computed from the first `--reports` path
+given; every path is used for rank stability. This requires `ollama serve` running
+locally (same GEval judge model as above) — the GEval calls are not mocked outside
+of tests.
 # candidateranking
