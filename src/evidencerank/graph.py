@@ -1,3 +1,4 @@
+import time
 from typing import TypedDict
 
 import click
@@ -31,6 +32,7 @@ class PipelineState(TypedDict, total=False):
     judge_results: dict[str, JudgeResult]
     calibrated_results: list[CalibratedResult]
     hallucination_reports: dict[str, HallucinationReport]
+    stage_timings: dict[str, float]
     prefilter_threshold: float
     hallucination_threshold: float
 
@@ -94,13 +96,25 @@ def hallucination_check_node(state: PipelineState) -> dict:
     return {"hallucination_reports": reports, "judge_results": filtered_judge_results}
 
 
+def _timed_node(name, node_fn):
+    def wrapped(state: PipelineState) -> dict:
+        start = time.perf_counter()
+        result = dict(node_fn(state))
+        elapsed = time.perf_counter() - start
+        timings = dict(state.get("stage_timings", {}))
+        timings[name] = elapsed
+        result["stage_timings"] = timings
+        return result
+    return wrapped
+
+
 def build_graph():
     graph = StateGraph(PipelineState)
-    graph.add_node("extract_profiles", extract_profiles_node)
-    graph.add_node("prefilter", prefilter_node)
-    graph.add_node("judge", judge_node)
-    graph.add_node("calibrate", calibrate_node)
-    graph.add_node("hallucination_check", hallucination_check_node)
+    graph.add_node("extract_profiles", _timed_node("extract_profiles", extract_profiles_node))
+    graph.add_node("prefilter", _timed_node("prefilter", prefilter_node))
+    graph.add_node("judge", _timed_node("judge", judge_node))
+    graph.add_node("hallucination_check", _timed_node("hallucination_check", hallucination_check_node))
+    graph.add_node("calibrate", _timed_node("calibrate", calibrate_node))
 
     graph.set_entry_point("extract_profiles")
     graph.add_edge("extract_profiles", "prefilter")
