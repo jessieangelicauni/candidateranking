@@ -206,6 +206,22 @@ def test_build_eval_markdown_report_multi_run_includes_rank_stability(tmp_path, 
     assert "1.000" in markdown  # identical rankings -> spearman/kendall == 1.0
 
 
+def test_build_eval_markdown_report_includes_groundedness_caveat(tmp_path, monkeypatch):
+    from evaluation.report import build_eval_markdown_report
+
+    report_path = tmp_path / "report.json"
+    _write_calibrated_report(report_path, {"alice": 1})
+
+    monkeypatch.setattr(groundedness_metric, "measure", Mock(return_value=0.9))
+    monkeypatch.setattr(recruiter_alignment_metric, "measure", Mock(return_value=0.9))
+    monkeypatch.setattr(evidence_relevancy_metric, "measure", Mock(return_value=0.9))
+
+    markdown = build_eval_markdown_report([report_path])
+
+    assert "trend toward ~100%" in markdown
+    assert "RecruiterAlignment and EvidenceRelevancy" in markdown
+
+
 def test_write_eval_markdown_report_writes_file(tmp_path, monkeypatch):
     from evaluation.report import write_eval_markdown_report
 

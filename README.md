@@ -5,7 +5,11 @@ description, using local Ollama models orchestrated with LangGraph. See
 `docs/superpowers/specs/2026-07-24-evidencerank-design.md` for the full design, and
 `docs/superpowers/specs/2026-07-27-eval-metric-report-design.md` /
 `docs/superpowers/specs/2026-07-27-eval-report-cli-integration-design.md` for the
-evaluation-report tooling described below.
+evaluation-report tooling described below. See
+`docs/superpowers/specs/2026-07-27-judge-grounding-and-hallucination-design.md` for a
+later change that reorders the pipeline (Hallucination Checker now runs before the Pool
+Calibrator, not after) and reworks Judge grounding — supersedes the pipeline diagram in
+the original design doc.
 
 ## Setup
 
@@ -34,8 +38,11 @@ uv run evidencerank \
 ```
 
 The pipeline prints a `Running stage: <name>` line to stdout as each of the 6 stages
-(`extract_profiles`, `prefilter`, `judge`, `shortlist`, `calibrate`, `hallucination_check`)
-starts, so you can follow progress on longer runs.
+(`extract_profiles`, `prefilter`, `judge`, `hallucination_check`, `shortlist`, `calibrate`)
+starts, so you can follow progress on longer runs. `hallucination_check` runs before
+`shortlist`/`calibrate`, not after — unverified evidence is stripped from a candidate's
+Judge result before it's shortlisted or calibrated (see `hallucination_reports` in
+`report.json` for the original, unstripped evidence).
 
 Only the judge's top 10 candidates by rating proceed to the `calibrate` stage (ties at the
 10th-place boundary are all kept, so the shortlist can be larger than 10 candidates — since
@@ -167,3 +174,9 @@ When the underlying `report.json` includes per-stage timing (`stage_timings`,
 added by the production pipeline), the report also includes a "Stage Timings"
 table showing wall-clock seconds per stage — absent for older `report.json`
 files that predate this field.
+
+Groundedness is expected to trend toward ~100% after the judge-grounding fix (2026-07-27):
+the hallucination checker now strips unverified evidence before calibration, so by
+construction the quotes remaining in a candidate's final evidence already passed fuzzy
+verification. RecruiterAlignment and EvidenceRelevancy remain the informative signals for
+judge quality.

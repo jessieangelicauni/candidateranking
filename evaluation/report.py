@@ -122,6 +122,13 @@ def build_eval_markdown_report(report_paths: list[str | Path]) -> str:
         pass_str = f"{m['pass_rate']:.1%}" if m["pass_rate"] is not None else "N/A"
         lines.append(f"| {name} | {m['n']} | {mean_str} | {std_str} | {pass_str} |")
 
+    lines.append(
+        "\n_Note: since the hallucination checker now strips unverified evidence before "
+        "calibration, Groundedness is expected to trend toward ~100% by construction "
+        "(remaining quotes already passed fuzzy verification) — RecruiterAlignment and "
+        "EvidenceRelevancy are the informative signals for judge quality._"
+    )
+
     stage_timings = data.get("stage_timings") or {}
     if stage_timings:
         lines += [
