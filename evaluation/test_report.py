@@ -221,3 +221,41 @@ def test_write_eval_markdown_report_writes_file(tmp_path, monkeypatch):
 
     assert out_path.exists()
     assert "## Pipeline Stats" in out_path.read_text(encoding="utf-8")
+
+
+def test_build_eval_markdown_report_includes_stage_timings_when_present(tmp_path, monkeypatch):
+    from evaluation.report import build_eval_markdown_report
+
+    report_path = tmp_path / "report.json"
+    _write_calibrated_report(report_path, {"alice": 1})
+    data = json.loads(report_path.read_text(encoding="utf-8"))
+    data["stage_timings"] = {"extract_profiles": 1.5, "judge": 3.25}
+    report_path.write_text(json.dumps(data), encoding="utf-8")
+
+    monkeypatch.setattr(groundedness_metric, "measure", Mock(return_value=0.9))
+    monkeypatch.setattr(recruiter_alignment_metric, "measure", Mock(return_value=0.9))
+    monkeypatch.setattr(evidence_relevancy_metric, "measure", Mock(return_value=0.9))
+
+    markdown = build_eval_markdown_report([report_path])
+
+    assert "## Stage Timings" in markdown
+    assert "| extract_profiles | 1.500 |" in markdown
+    assert "| judge | 3.250 |" in markdown
+
+
+def test_build_eval_markdown_report_omits_stage_timings_when_absent(tmp_path, monkeypatch):
+    from evaluation.report import build_eval_markdown_report
+
+    report_path = tmp_path / "report.json"
+    _write_calibrated_report(report_path, {"alice": 1})
+    # NOTE: intentionally does NOT add "stage_timings" — simulates an older
+    # report.json written before this key existed, to guard against a
+    # KeyError regression.
+
+    monkeypatch.setattr(groundedness_metric, "measure", Mock(return_value=0.9))
+    monkeypatch.setattr(recruiter_alignment_metric, "measure", Mock(return_value=0.9))
+    monkeypatch.setattr(evidence_relevancy_metric, "measure", Mock(return_value=0.9))
+
+    markdown = build_eval_markdown_report([report_path])
+
+    assert "## Stage Timings" not in markdown
