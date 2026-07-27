@@ -61,6 +61,11 @@ deleting the directory forces full re-extraction. **Like `report.json`, cached
 entries contain unredacted candidate contact info (name, email, phone,
 location) — don't treat `.cache/` as anonymized, and don't share it casually.**
 
+`report.md`'s table includes a "Hallucination Flags" column showing how many
+evidence items were removed for that candidate before calibration (see
+`report.json`'s `hallucination_reports` for the removed quotes themselves) — a
+dash (`—`) means every quote verified.
+
 Two thresholds are tunable: `--prefilter-threshold` (default `0.5`) sets the minimum
 cosine similarity between the JD's required skills and a candidate's skills to survive
 the embedding pre-filter; `--hallucination-threshold` (default `85.0`) sets the minimum

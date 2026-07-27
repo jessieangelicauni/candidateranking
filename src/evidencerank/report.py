@@ -50,17 +50,26 @@ def _format_evidence(state: dict, candidate_id: str) -> str:
     return _escape_table_cell(joined)
 
 
+def _format_hallucination_flag(state: dict, candidate_id: str) -> str:
+    """Render a candidate's hallucination-check outcome as one Markdown table cell."""
+    report = state.get("hallucination_reports", {}).get(candidate_id)
+    if report is None or not report.unverified_quotes:
+        return "—"
+    return f"{len(report.unverified_quotes)} removed"
+
+
 def build_markdown_report(state: dict) -> str:
     lines = [
-        "| Rank | Candidate | Tier | Rating | Key Evidence | Calibration Notes |",
-        "|---|---|---|---|---|---|",
+        "| Rank | Candidate | Tier | Rating | Key Evidence | Hallucination Flags | Calibration Notes |",
+        "|---|---|---|---|---|---|---|",
     ]
     for result in sorted(state.get("calibrated_results", []), key=lambda r: r.final_rank):
         notes = _escape_table_cell(result.calibration_notes)
         evidence = _format_evidence(state, result.candidate_id)
+        flags = _format_hallucination_flag(state, result.candidate_id)
         lines.append(
             f"| {result.final_rank} | {result.candidate_id} | {result.tier.value} "
-            f"| {result.rating} | {evidence} | {notes} |"
+            f"| {result.rating} | {evidence} | {flags} | {notes} |"
         )
     return "\n".join(lines)
 
