@@ -19,5 +19,6 @@ def resolve_model_name(stage: str) -> str:
     return os.environ.get(env_key, DEFAULT_MODELS[stage])
 
 
-def get_chat_model(stage: str, temperature: float = 0.0) -> ChatOllama:
-    return ChatOllama(model=resolve_model_name(stage), temperature=temperature)
+def get_chat_model(stage: str, temperature: float = 0.0, num_ctx: int | None = None) -> ChatOllama:
+    kwargs = {} if num_ctx is None else {"num_ctx": num_ctx}
+    return ChatOllama(model=resolve_model_name(stage), temperature=temperature, **kwargs)

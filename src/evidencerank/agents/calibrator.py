@@ -14,12 +14,31 @@ Independent judge results for every candidate in the pool:
 {judge_results}
 """
 
+# The calibrator prompt scales with pool size (every judge result is embedded in one
+# call). Ollama defaults to a 4096-token runtime context when num_ctx isn't set, which
+# silently truncates the prompt for pools beyond a handful of candidates and drops
+# candidates from the response with no error. 32768 matches the max context of the
+# models this stage is configured to use by default.
+CALIBRATOR_NUM_CTX = 32768
+
 
 def calibrate_pool(jd: JDRequirements, judge_results: list[JudgeResult]) -> list[CalibratedResult]:
-    model = get_chat_model("calibrator").with_structured_output(CalibrationOutput)
+    model = get_chat_model("calibrator", num_ctx=CALIBRATOR_NUM_CTX).with_structured_output(
+        CalibrationOutput
+    )
     prompt = CALIBRATOR_PROMPT.format(
         jd_requirements=jd.model_dump_json(),
         judge_results=[result.model_dump() for result in judge_results],
     )
     output = model.invoke(prompt)
+
+    expected_ids = {result.candidate_id for result in judge_results}
+    actual_ids = {result.candidate_id for result in output.results}
+    if actual_ids != expected_ids:
+        missing = sorted(expected_ids - actual_ids)
+        raise ValueError(
+            f"Calibrator returned {len(actual_ids)}/{len(expected_ids)} candidates; "
+            f"missing: {missing}. This usually means the candidate pool's prompt "
+            f"exceeded the model's context window (num_ctx={CALIBRATOR_NUM_CTX})."
+        )
     return output.results
