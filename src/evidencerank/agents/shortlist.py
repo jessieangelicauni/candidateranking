@@ -28,7 +28,7 @@ def select_shortlist(
 
     shortlisted = [result for result in ranked if result.rating >= cutoff_rating]
     not_shortlisted = [
-        {"candidate_id": result.candidate_id, "reason": "ranked outside judge's top 10 by rating"}
+        {"candidate_id": result.candidate_id, "reason": f"ranked outside judge's top {size} by rating"}
         for result in ranked
         if result.rating < cutoff_rating
     ]

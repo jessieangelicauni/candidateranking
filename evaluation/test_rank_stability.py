@@ -1,6 +1,8 @@
 import json
 from pathlib import Path
 
+import pytest
+
 from evaluation.rank_stability import load_rank_map, rank_stability
 
 
@@ -45,3 +47,29 @@ def test_rank_stability_reversed_rankings_scores_negative_one(tmp_path):
     result = rank_stability([str(run1), str(run2)])
 
     assert result["mean_spearman"] == -1.0
+
+
+def test_rank_stability_intersects_candidate_ids_across_runs(tmp_path):
+    # run2's shortlist doesn't include "d" (e.g. it ranked outside the judge's
+    # top 10 in that run). The shared candidates a, b, c have identical
+    # relative order in both runs, so correlation over just {a, b, c} is 1.0.
+    run1 = tmp_path / "run1.json"
+    run2 = tmp_path / "run2.json"
+    _write_report(run1, {"a": 1, "b": 2, "c": 3, "d": 4})
+    _write_report(run2, {"a": 1, "b": 2, "c": 3})
+
+    result = rank_stability([str(run1), str(run2)])
+
+    assert result["mean_spearman"] == 1.0
+    assert result["mean_kendall_tau"] == 1.0
+    assert result["n_runs"] == 2
+
+
+def test_rank_stability_raises_when_fewer_than_two_candidates_are_common(tmp_path):
+    run1 = tmp_path / "run1.json"
+    run2 = tmp_path / "run2.json"
+    _write_report(run1, {"a": 1, "b": 2})
+    _write_report(run2, {"a": 1})
+
+    with pytest.raises(ValueError):
+        rank_stability([str(run1), str(run2)])

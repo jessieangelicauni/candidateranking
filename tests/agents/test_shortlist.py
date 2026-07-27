@@ -20,19 +20,23 @@ def test_select_shortlist_keeps_everyone_when_pool_is_at_or_under_size():
     assert not_shortlisted == []
 
 
-def test_select_shortlist_keeps_top_10_by_rating_with_no_ties():
+def test_select_shortlist_keeps_top_10_by_rating_with_no_boundary_tie():
     # Create 12 candidates: 8 at rating 10, 2 at rating 9, 2 at rating 1.
     # Top 10 are the 8 at rating 10 plus the 2 at rating 9.
     # The 2 at rating 1 are excluded.
-    judge_results = [_judge_result(f"c{i}", rating=10) for i in range(8)] + \
-                    [_judge_result(f"c{i}", rating=9) for i in range(8, 10)] + \
-                    [_judge_result(f"c{i}", rating=1) for i in range(10, 12)]
+    judge_results = (
+        [_judge_result(f"c{i}", rating=10) for i in range(8)]
+        + [_judge_result(f"c{i}", rating=9) for i in range(8, 10)]
+        + [_judge_result(f"c{i}", rating=1) for i in range(10, 12)]
+    )
 
     shortlisted, not_shortlisted = select_shortlist(judge_results)
 
     assert {r.candidate_id for r in shortlisted} == {f"c{i}" for i in range(10)}
     assert {entry["candidate_id"] for entry in not_shortlisted} == {"c10", "c11"}
-    assert not_shortlisted[0]["reason"] == "ranked outside judge's top 10 by rating"
+    assert all(
+        entry["reason"] == "ranked outside judge's top 10 by rating" for entry in not_shortlisted
+    )
 
 
 def test_select_shortlist_includes_ties_at_the_boundary():
@@ -51,3 +55,16 @@ def test_select_shortlist_includes_ties_at_the_boundary():
 
 def test_select_shortlist_handles_empty_input():
     assert select_shortlist([]) == ([], [])
+
+
+def test_select_shortlist_returns_whole_pool_when_everyone_is_tied():
+    # All 15 candidates share rating=8. There's no "10th highest rating" that
+    # excludes anyone, so the entire pool is shortlisted despite being well
+    # over size=10 - this is what "ties are never arbitrarily cut" means in
+    # the worst case, and it's the reason the shortlist is not a hard bound.
+    judge_results = [_judge_result(f"c{i}", rating=8) for i in range(15)]
+
+    shortlisted, not_shortlisted = select_shortlist(judge_results)
+
+    assert len(shortlisted) == 15
+    assert not_shortlisted == []
