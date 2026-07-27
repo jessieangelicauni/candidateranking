@@ -81,7 +81,8 @@ def test_compute_geval_scores_aggregates_two_candidates(tmp_path, monkeypatch):
         },
     )
 
-    monkeypatch.setattr(groundedness_metric, "measure", Mock(side_effect=[0.9, 0.5]))
+    groundedness_mock = Mock(side_effect=[0.9, 0.5])
+    monkeypatch.setattr(groundedness_metric, "measure", groundedness_mock)
     monkeypatch.setattr(recruiter_alignment_metric, "measure", Mock(side_effect=[0.8, 0.4]))
     monkeypatch.setattr(evidence_relevancy_metric, "measure", Mock(side_effect=[1.0, 0.6]))
 
@@ -94,6 +95,24 @@ def test_compute_geval_scores_aggregates_two_candidates(tmp_path, monkeypatch):
 
     assert round(scores["RecruiterAlignment"]["mean"], 4) == 0.6
     assert scores["EvidenceRelevancy"]["pass_rate"] == 0.5  # only 1.0 >= 0.7 threshold
+
+    # Verify that test cases were constructed correctly with proper data wiring
+    assert groundedness_mock.call_count == 2
+    call_args_list = groundedness_mock.call_args_list
+
+    # Check alice's test case (first call)
+    alice_test_case = call_args_list[0][0][0]
+    assert 'c1: "q1"' in alice_test_case.actual_output
+    assert alice_test_case.context == ["alice cv"]
+    assert "Title: ML Engineer" in alice_test_case.input
+    assert "Required skills: Python, PyTorch" in alice_test_case.input
+
+    # Check bob's test case (second call)
+    bob_test_case = call_args_list[1][0][0]
+    assert 'c2: "q2"' in bob_test_case.actual_output
+    assert bob_test_case.context == ["bob cv"]
+    assert "Title: ML Engineer" in bob_test_case.input
+    assert "Required skills: Python, PyTorch" in bob_test_case.input
 
 
 def test_compute_geval_scores_empty_judge_results_returns_none_fields(tmp_path, monkeypatch):

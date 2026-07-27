@@ -15,8 +15,11 @@ from evaluation.report import write_eval_markdown_report
 def eval_report(report_paths, out):
     """Build an evaluation metric report from one or more report.json files.
 
-    Pass one path for GEval metrics + pipeline stats only, or two or more to
-    also include rank stability across runs.
+    Pass --reports once per report.json path. One path gives GEval metrics +
+    pipeline stats only; repeat --reports for each additional run to also
+    include rank stability across runs, e.g.:
+
+        evidencerank-eval-report --reports a.json --reports b.json --out eval_report.md
     """
     write_eval_markdown_report(list(report_paths), out)
     click.echo(f"Wrote {out}")
