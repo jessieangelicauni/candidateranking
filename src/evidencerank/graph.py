@@ -50,7 +50,7 @@ def extract_profiles_node(state: PipelineState) -> dict:
 
 def prefilter_node(state: PipelineState) -> dict:
     click.echo("Running stage: prefilter")
-    threshold = state.get("prefilter_threshold", 0.5)
+    threshold = state.get("prefilter_threshold", 0.7)
     candidate_skills = {
         candidate_id: profile.skills for candidate_id, profile in state["profiles"].items()
     }

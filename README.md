@@ -73,7 +73,7 @@ evidence items were removed for that candidate before calibration (see
 `report.json`'s `hallucination_reports` for the removed quotes themselves) — a
 dash (`—`) means every quote verified.
 
-Two thresholds are tunable: `--prefilter-threshold` (default `0.5`) sets the minimum
+Two thresholds are tunable: `--prefilter-threshold` (default `0.7`) sets the minimum
 cosine similarity between the JD's required skills and a candidate's skills to survive
 the embedding pre-filter; `--hallucination-threshold` (default `85.0`) sets the minimum
 fuzzy-match score for a quoted piece of evidence to count as verified against the

@@ -21,7 +21,7 @@ def prefilter_candidate(
     candidate_id: str,
     jd_required_skills: list[str],
     candidate_skills: list[str],
-    threshold: float = 0.5,
+    threshold: float = 0.7,
 ) -> PrefilterResult:
     embedder = _get_embedder()
     jd_text = ", ".join(jd_required_skills)
@@ -38,7 +38,7 @@ def prefilter_candidate(
 def prefilter_candidates(
     jd_required_skills: list[str],
     candidate_skills: dict[str, list[str]],
-    threshold: float = 0.5,
+    threshold: float = 0.7,
 ) -> dict[str, PrefilterResult]:
     embedder = _get_embedder()
     jd_text = ", ".join(jd_required_skills)
