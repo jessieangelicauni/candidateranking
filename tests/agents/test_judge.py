@@ -223,6 +223,64 @@ def test_judge_candidate_prompt_forbids_quoting_paraphrased_prose_fields(monkeyp
     assert "Master's Degree, Computer Science" in prompt_sent
 
 
+def test_judge_candidate_prompt_forbids_recombining_structured_fields_into_new_sentences(monkeypatch):
+    # Observed on a real resume: the structured education field stores
+    # degree/institution/year separately, and the Judge assembled them into
+    # a new sentence ("B.Sc. in Artificial Intelligence, TU Delft 2019") in a
+    # different order than the resume actually lays them out. That's not a
+    # verbatim quote even though every underlying fact is real - the prompt
+    # must forbid synthesizing sentences from combined fields, not just
+    # quoting a single field verbatim.
+    verdict = JudgeVerdict(
+        tier=Tier.STRONG_FIT,
+        rating=8,
+        evidence=[EvidenceClaim(claim="Has Python experience", quote="5 years of Python experience")],
+    )
+    fake_structured_model = MagicMock()
+    fake_structured_model.invoke.return_value = verdict
+    fake_chat_model = MagicMock()
+    fake_chat_model.with_structured_output.return_value = fake_structured_model
+    monkeypatch.setattr(
+        "evidencerank.agents.judge.get_chat_model",
+        lambda stage: fake_chat_model,
+    )
+    jd = JDRequirements(title="ML Engineer", required_skills=["Python"])
+
+    judge_candidate(jd, _make_profile())
+
+    prompt_sent = fake_structured_model.invoke.call_args[0][0]
+    assert "combining two or more separate structured fields into a new sentence" in prompt_sent
+    assert "B.Sc. in Artificial Intelligence, TU Delft 2019" in prompt_sent
+
+
+def test_judge_candidate_prompt_forbids_quoting_job_requirements(monkeypatch):
+    # Observed on a real resume with zero ML content: the Judge produced an
+    # evidence item quoting "Machine Learning" verbatim from the JD's
+    # required_skills list, not from the candidate's resume at all - a
+    # fabrication the prompt never explicitly warned against, since the
+    # existing rules only addressed the structured-profile block.
+    verdict = JudgeVerdict(
+        tier=Tier.STRONG_FIT,
+        rating=8,
+        evidence=[EvidenceClaim(claim="Has Python experience", quote="5 years of Python experience")],
+    )
+    fake_structured_model = MagicMock()
+    fake_structured_model.invoke.return_value = verdict
+    fake_chat_model = MagicMock()
+    fake_chat_model.with_structured_output.return_value = fake_structured_model
+    monkeypatch.setattr(
+        "evidencerank.agents.judge.get_chat_model",
+        lambda stage: fake_chat_model,
+    )
+    jd = JDRequirements(title="ML Engineer", required_skills=["Python"])
+
+    judge_candidate(jd, _make_profile())
+
+    prompt_sent = fake_structured_model.invoke.call_args[0][0]
+    assert 'Never quote the "Job requirements" block' in prompt_sent
+    assert "it is the role's requirements, not the candidate's resume" in prompt_sent
+
+
 def test_judge_candidate_prompt_requires_contiguous_non_empty_quotes(monkeypatch):
     verdict = JudgeVerdict(
         tier=Tier.STRONG_FIT,

@@ -23,7 +23,20 @@ list, like education.degree — that string may be the CV-extractor's own paraph
 resume's actual wording (e.g. normalizing "M.Sc." to "Master's Degree, Computer Science") and is \
 not guaranteed to match the resume text. Never quote an education, work_history, or projects \
 field directly, even when it looks like a normal sentence — find and quote the equivalent line \
-from the resume text block instead.
+from the resume text block instead. This includes combining two or more separate structured \
+fields into a new sentence of your own (e.g. writing "B.Sc. in Artificial Intelligence, TU Delft \
+2019" by joining education.degree, education.institution, and education.year together) — that \
+combined sentence is not resume text either, even if every field in it is individually real, and \
+even if the resume happens to contain the same information laid out differently (e.g. \
+institution and year on one line, degree on the next). Quote the resume's own line(s) instead of \
+assembling one yourself.
+
+Never quote the "Job requirements" block below, under any circumstances — it is the role's \
+requirements, not the candidate's resume, so it can never be evidence that a candidate has a \
+skill. For example, if "Machine Learning" is listed as a required skill and the candidate's \
+resume never mentions it, do not create an evidence item quoting "Machine Learning" (or any \
+other job-requirements wording) — there is no genuine quote to give, so do not include that \
+claim at all.
 
 Every quote must be a single, continuous span of text copied from ONE location in the resume — \
 never join two or more separate lines, bullets, or sections together into one quote, even if \
