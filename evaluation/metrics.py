@@ -24,12 +24,23 @@ groundedness_metric = GEval(
 
 recruiter_alignment_metric = GEval(
     name="RecruiterAlignment",
-    criteria=(
-        "Determine whether 'actual_output' reflects sound recruiter judgment given "
-        "'input' (the job requirements): does it weigh relevant experience depth, "
-        "measurable impact, and technical skill alignment appropriately, rather than "
-        "superficial keyword matching?"
-    ),
+    evaluation_steps=[
+        "Read 'input' (the job requirements) only as background context for what the role "
+        "needs — it is not a checklist that every requirement must be evidenced for the "
+        "output to count as sound judgment.",
+        "Read 'actual_output': the recruiter's assigned tier, rating, and the evidence "
+        "claims backing them.",
+        "Judge whether the tier and rating are well-calibrated to the depth and quality of "
+        "the evidence actually presented — do experience depth, measurable impact, and "
+        "technical skill alignment (for the skills the evidence does cover) plausibly "
+        "justify the tier/rating given, rather than superficial keyword matching?",
+        "A tier/rating that correctly reflects partial fit (e.g. a moderate rating because "
+        "several requirements aren't evidenced) is sound recruiter judgment and should score "
+        "high. Do not lower the score merely because the candidate lacks skills the resume "
+        "doesn't show — only lower it if the tier/rating is miscalibrated relative to the "
+        "evidence shown (e.g. weak evidence rated as Strong Fit, or strong evidence rated "
+        "too low).",
+    ],
     evaluation_params=[LLMTestCaseParams.INPUT, LLMTestCaseParams.ACTUAL_OUTPUT],
     threshold=0.7,
     model=_eval_model,
@@ -37,11 +48,20 @@ recruiter_alignment_metric = GEval(
 
 evidence_relevancy_metric = GEval(
     name="EvidenceRelevancy",
-    criteria=(
-        "Determine whether the quoted evidence in 'actual_output' is relevant to the "
-        "job requirement claim it supports in 'input', not merely present somewhere in "
-        "the resume."
-    ),
+    evaluation_steps=[
+        "'actual_output' contains one or more evidence items, each an explicit claim "
+        "paired with a quote.",
+        "For EACH evidence item, judge whether its quote is relevant to and actually "
+        "supports the specific claim it is attached to — not whether the resume as a whole "
+        "covers every job requirement listed in 'input'.",
+        "Do not penalize the output for omitting evidence about a job requirement that no "
+        "evidence item claims to address — that is a coverage gap, not an evidence-relevancy "
+        "failure, and is out of scope for this metric.",
+        "Score high if every included claim's quote genuinely relates to and demonstrates "
+        "that claim. Score low if one or more claims pair a quote that does not actually "
+        "relate to or demonstrate the named skill/claim (e.g. a quote about a different "
+        "technology than the one the claim names).",
+    ],
     evaluation_params=[LLMTestCaseParams.INPUT, LLMTestCaseParams.ACTUAL_OUTPUT],
     threshold=0.7,
     model=_eval_model,
