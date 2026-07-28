@@ -18,6 +18,7 @@ load_dotenv()
 @click.option("--out-md", default="report.md", type=click.Path())
 @click.option("--prefilter-threshold", default=0.5, type=float)
 @click.option("--hallucination-threshold", default=85.0, type=float)
+@click.option("--llm-concurrency", default=4, type=int)
 @click.option("--with-eval-report", is_flag=True, default=False)
 @click.option("--out-eval-report", default="eval_report.md", type=click.Path())
 def rank(
@@ -27,6 +28,7 @@ def rank(
     out_md,
     prefilter_threshold,
     hallucination_threshold,
+    llm_concurrency,
     with_eval_report,
     out_eval_report,
 ):
@@ -46,6 +48,7 @@ def rank(
             "raw_resumes": raw_resumes,
             "prefilter_threshold": prefilter_threshold,
             "hallucination_threshold": hallucination_threshold,
+            "max_concurrency": llm_concurrency,
         }
     )
 
