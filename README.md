@@ -31,32 +31,28 @@ this repo for that purpose — then run:
 ```bash
 uv run evidencerank \
   --jd machine_learning_engineer.txt \
-  --resumes-dir resumes
+  --resumes-dir resumes --llm-concurrency 4
 ```
 
-The pipeline prints a `Running stage: <name>` line to stdout as each of the 6 stages
-(`extract_profiles`, `prefilter`, `judge`, `hallucination_check`, `shortlist`, `calibrate`)
+The pipeline prints a `Running stage: <name>` line to stdout as each of the 5 stages
+(`extract_profiles`, `prefilter`, `judge`, `hallucination_check`, `calibrate`)
 starts, so you can follow progress on longer runs. `hallucination_check` runs before
-`shortlist`/`calibrate`, not after — unverified evidence is stripped from a candidate's
-Judge result before it's shortlisted or calibrated (see `hallucination_reports` in
-`report.json` for the original, unstripped evidence).
+`calibrate`, not after — unverified evidence is stripped from a candidate's Judge result
+before it's calibrated (see `hallucination_reports` in `report.json` for the original,
+unstripped evidence).
 
-Only the judge's top 10 candidates by rating proceed to the `calibrate` stage (ties at the
-10th-place boundary are all kept, so the shortlist can be larger than 10 candidates — since
-ratings only range 1-10, a pool with many candidates tied at the top rating can send the
-entire pool to the calibrator; this reduces the calibrator's prompt size in the common case,
-it does not hard-bound it). Everyone judged is still fully recorded in `report.json`'s
-`profiles` and `judge_results`;
-candidates cut before calibration are additionally listed in `report.json`'s `not_shortlisted`
-with the reason `"ranked outside judge's top 10 by rating"`. `report.md`'s ranked table only
-reflects the shortlist that reached calibration.
+Every candidate that passes the pre-filter and gets judged proceeds to `calibrate` — there
+is no shortlist cap. For very large candidate pools this means the Calibrator's single LLM
+call (every judge result embedded in one prompt) can grow large enough to approach its
+context window; see the `CALIBRATOR_NUM_CTX` comment in `agents/calibrator.py` if you're
+running against hundreds of candidates.
 
 This produces `report.json` (full evidence trail, including dropped candidates and
 hallucination check results), `report.md` (a ranked Markdown table), and
-`eval_report.md` (the evaluation metric report — see
+`evaluation-metric.md` (the evaluation metric report — see
 [Evaluation metric report](#evaluation-metric-report) below), all written to the
 directory you run `evidencerank` from. Each run overwrites the previous one's
-`report.json`/`report.md`/`eval_report.md` — rename them (e.g. `mv report.json
+`report.json`/`report.md`/`evaluation-metric.md` — rename them (e.g. `mv report.json
 run1.json`) between runs if you need to keep more than one.
 
 Extracted candidate profiles are cached at `.cache/evidencerank/extract_profiles/`
@@ -94,7 +90,7 @@ audit-trail artifact. It is not the same view the Judge model sees (that input i
 redacted for blind evaluation; see the design spec's Fairness section). Don't treat or
 share `report.json` as if it were already anonymized.
 
-Every run also generates the evaluation metric report (`eval_report.md`) — see
+Every run also generates the evaluation metric report (`evaluation-metric.md`) — see
 [Evaluation metric report](#evaluation-metric-report) below for what it contains. This
 requires `ollama serve` running locally with the eval judge model available (same as the
 standalone `evidencerank-eval-report` command).
@@ -158,7 +154,7 @@ aggregates, pipeline stats, and (when 2+ runs are given) rank stability, from on
 more existing `report.json` files:
 
 ```bash
-uv run evidencerank-eval-report --reports report.json --out eval_report.md
+uv run evidencerank-eval-report --reports report.json --out evaluation-metric.md
 ```
 
 If you're evaluating a single run right after producing it, `evidencerank rank` (see
@@ -171,7 +167,7 @@ include rank stability across runs:
 ```bash
 uv run evidencerank-eval-report \
   --reports run1.json --reports run2.json --reports run3.json \
-  --out eval_report.md
+  --out evaluation-metric.md
 ```
 
 GEval scores and pipeline stats are always computed from the first `--reports` path

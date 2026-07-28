@@ -163,95 +163,11 @@ def test_graph_runs_extract_prefilter_judge_hallucination_calibrate(monkeypatch)
     # Regression guard 5: every stage records a non-negative timing, keyed by
     # node name, so latency is visible in the eventual report.json.
     assert set(final_state["stage_timings"].keys()) == {
-        "extract_profiles", "prefilter", "judge", "hallucination_check", "shortlist", "calibrate",
+        "extract_profiles", "prefilter", "judge", "hallucination_check", "calibrate",
     }
     for seconds in final_state["stage_timings"].values():
         assert isinstance(seconds, float)
         assert seconds >= 0.0
-
-
-def test_graph_shortlists_top_10_by_rating_before_calibrating(monkeypatch):
-    jd = JDRequirements(title="ML Engineer", required_skills=["Python"])
-    raw_resumes = {f"c{i}": f"Python resume {i}" for i in range(12)}
-
-    def fake_extract_cvs(candidates, max_concurrency):
-        return {
-            candidate_id: CandidateProfile(
-                candidate_id=candidate_id,
-                raw_cv_text=raw_text,
-                contact=ContactInfo(name=candidate_id),
-                skills=["Python"],
-            )
-            for candidate_id, raw_text in candidates.items()
-        }
-
-    def fake_prefilter_candidates(jd_required_skills, candidate_skills, threshold):
-        return {
-            candidate_id: PrefilterResult(candidate_id=candidate_id, similarity=0.9, passed=True)
-            for candidate_id in candidate_skills
-        }
-
-    # 12 candidates, ratings capped to the valid 1-10 range (JudgeResult.rating
-    # is Field(ge=1, le=10)): c0-c7 at 10, c8-c9 at 9, c10-c11 at 3. The
-    # cutoff for the top 10 lands cleanly between the rating-9 and rating-3
-    # groups, so the top 10 by rating is exactly c0..c9 with no boundary tie
-    # to resolve here (tie-at-the-boundary behavior is already covered in
-    # isolation by tests/agents/test_shortlist.py).
-    def fake_judge_candidates(jd_requirements, profiles, max_concurrency):
-        ratings = [10] * 8 + [9] * 2 + [3] * 2
-        results = {}
-        for profile in profiles:
-            index = int(profile.candidate_id[1:])
-            results[profile.candidate_id] = JudgeResult(
-                candidate_id=profile.candidate_id,
-                tier=Tier.STRONG_FIT,
-                rating=ratings[index],
-                evidence=[EvidenceClaim(claim="Strong fit", quote="Python")],
-            )
-        return results
-
-    calibrate_calls: list[list[str]] = []
-
-    def fake_calibrate_pool(jd_requirements, judge_results):
-        calibrate_calls.append([r.candidate_id for r in judge_results])
-        return [
-            CalibratedResult(
-                candidate_id=r.candidate_id, final_rank=i + 1, tier=r.tier,
-                rating=r.rating, calibration_notes="Ranked within shortlist",
-            )
-            for i, r in enumerate(judge_results)
-        ]
-
-    def fake_check_evidence(judge_result, raw_cv_text, threshold):
-        return HallucinationReport(candidate_id=judge_result.candidate_id, unverified_quotes=[])
-
-    _patch_pipeline_fakes(
-        monkeypatch,
-        extract_cvs=fake_extract_cvs,
-        prefilter_candidates=fake_prefilter_candidates,
-        judge_candidates=fake_judge_candidates,
-        calibrate_pool=fake_calibrate_pool,
-        check_evidence=fake_check_evidence,
-    )
-
-    graph = build_graph()
-    final_state = graph.invoke({"jd": jd, "raw_resumes": raw_resumes})
-
-    expected_shortlist = {f"c{i}" for i in range(10)}
-    expected_cut = {f"c{i}" for i in range(10, 12)}
-
-    assert len(calibrate_calls) == 1
-    assert set(calibrate_calls[0]) == expected_shortlist
-    assert set(final_state["shortlisted_results"].keys()) == expected_shortlist
-    assert {entry["candidate_id"] for entry in final_state["not_shortlisted"]} == expected_cut
-    assert all(
-        entry["reason"] == "ranked outside judge's top 10 by rating"
-        for entry in final_state["not_shortlisted"]
-    )
-    # judge_results in state still contains everyone judged, shortlisted or not.
-    assert set(final_state["judge_results"].keys()) == expected_shortlist | expected_cut
-    # hallucination check still runs against the full judged pool, not just the shortlist.
-    assert set(final_state["hallucination_reports"].keys()) == expected_shortlist | expected_cut
 
 
 def test_graph_forwards_max_concurrency_value_to_batch_functions(monkeypatch):

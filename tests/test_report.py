@@ -30,9 +30,6 @@ def _sample_state():
             "weak": PrefilterResult(candidate_id="weak", similarity=0.1, passed=False),
         },
         "dropped": [{"candidate_id": "weak", "reason": "pre-filter: no relevant skill overlap"}],
-        "not_shortlisted": [
-            {"candidate_id": "cut", "reason": "ranked outside judge's top 10 by rating"}
-        ],
         "judge_results": {
             "strong": JudgeResult(
                 candidate_id="strong", tier=Tier.STRONG_FIT, rating=9,
@@ -62,7 +59,6 @@ def test_build_json_report_contains_all_sections():
     assert report["prefilter_results"]["strong"]["passed"] is True
     assert report["prefilter_results"]["weak"]["passed"] is False
     assert report["dropped"][0]["candidate_id"] == "weak"
-    assert report["not_shortlisted"][0]["candidate_id"] == "cut"
     assert report["judge_results"]["strong"]["rating"] == 9
     assert report["calibrated_results"][0]["final_rank"] == 1
     assert report["hallucination_reports"]["strong"]["unverified_quotes"] == []
@@ -75,7 +71,6 @@ def test_build_json_report_defaults_missing_stages_to_empty():
 
     assert report["profiles"] == {}
     assert report["prefilter_results"] == {}
-    assert report["not_shortlisted"] == []
 
 
 def test_build_json_report_includes_stage_timings():

@@ -13,7 +13,6 @@ from evidencerank.agents.hallucination_checker import (
 )
 from evidencerank.agents.judge import judge_candidates
 from evidencerank.agents.prefilter import prefilter_candidates
-from evidencerank.agents.shortlist import select_shortlist
 from evidencerank.models import (
     CalibratedResult,
     CandidateProfile,
@@ -31,8 +30,6 @@ class PipelineState(TypedDict, total=False):
     prefilter_results: dict[str, PrefilterResult]
     dropped: list[dict[str, str]]
     judge_results: dict[str, JudgeResult]
-    shortlisted_results: dict[str, JudgeResult]
-    not_shortlisted: list[dict[str, str]]
     calibrated_results: list[CalibratedResult]
     hallucination_reports: dict[str, HallucinationReport]
     stage_timings: dict[str, float]
@@ -75,18 +72,9 @@ def judge_node(state: PipelineState) -> dict:
     return {"judge_results": judge_results}
 
 
-def shortlist_node(state: PipelineState) -> dict:
-    click.echo("Running stage: shortlist")
-    shortlisted, not_shortlisted = select_shortlist(list(state["judge_results"].values()))
-    return {
-        "shortlisted_results": {result.candidate_id: result for result in shortlisted},
-        "not_shortlisted": not_shortlisted,
-    }
-
-
 def calibrate_node(state: PipelineState) -> dict:
     click.echo("Running stage: calibrate")
-    calibrated = calibrate_pool(state["jd"], list(state["shortlisted_results"].values()))
+    calibrated = calibrate_pool(state["jd"], list(state["judge_results"].values()))
     return {"calibrated_results": calibrated}
 
 
@@ -121,15 +109,13 @@ def build_graph():
     graph.add_node("prefilter", _timed_node("prefilter", prefilter_node))
     graph.add_node("judge", _timed_node("judge", judge_node))
     graph.add_node("hallucination_check", _timed_node("hallucination_check", hallucination_check_node))
-    graph.add_node("shortlist", _timed_node("shortlist", shortlist_node))
     graph.add_node("calibrate", _timed_node("calibrate", calibrate_node))
 
     graph.set_entry_point("extract_profiles")
     graph.add_edge("extract_profiles", "prefilter")
     graph.add_edge("prefilter", "judge")
     graph.add_edge("judge", "hallucination_check")
-    graph.add_edge("hallucination_check", "shortlist")
-    graph.add_edge("shortlist", "calibrate")
+    graph.add_edge("hallucination_check", "calibrate")
     graph.add_edge("calibrate", END)
 
     return graph.compile()

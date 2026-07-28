@@ -14,7 +14,6 @@ def build_json_report(state: dict) -> dict:
             for candidate_id, result in state.get("prefilter_results", {}).items()
         },
         "dropped": state.get("dropped", []),
-        "not_shortlisted": state.get("not_shortlisted", []),
         "judge_results": {
             candidate_id: result.model_dump()
             for candidate_id, result in state.get("judge_results", {}).items()
