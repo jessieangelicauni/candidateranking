@@ -62,6 +62,19 @@ def test_judge_result_rating_bounds():
     assert result.rating == 8
 
 
+def test_judge_verdict_drops_blank_and_whitespace_only_quotes():
+    verdict = JudgeVerdict(
+        tier=Tier.STRONG_FIT,
+        rating=8,
+        evidence=[
+            EvidenceClaim(claim="Has Python experience", quote="5 years of Python"),
+            EvidenceClaim(claim="Fabricated blank", quote=""),
+            EvidenceClaim(claim="Fabricated whitespace", quote="   "),
+        ],
+    )
+    assert [claim.quote for claim in verdict.evidence] == ["5 years of Python"]
+
+
 def test_calibration_output_wraps_list():
     output = CalibrationOutput(
         results=[

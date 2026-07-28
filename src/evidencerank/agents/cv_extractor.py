@@ -9,6 +9,11 @@ CV_EXTRACTOR_PROMPT = """You are an expert technical recruiter. Read the resume 
 extract the candidate's contact info, skills, work history, education, and projects exactly \
 as stated. Do not infer skills or experience that are not explicitly present in the text.
 
+A resume's work history is not always under a heading literally called "Work History" or \
+"Experience" - treat any section describing paid work, internships, or contract roles as work \
+history regardless of its heading wording (e.g. "Employment History", "Career History", or a \
+combined heading like "Internships / Experience"), and extract every entry in it.
+
 Resume:
 {cv_text}
 """

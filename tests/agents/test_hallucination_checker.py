@@ -26,7 +26,7 @@ def _profile(**overrides) -> CandidateProfile:
     return CandidateProfile(**defaults)
 
 
-def test_check_evidence_verifies_quote_matching_extracted_achievement():
+def test_check_evidence_verifies_quote_matching_raw_cv_text():
     judge_result = JudgeResult(
         candidate_id="c1",
         tier=Tier.STRONG_FIT,
@@ -40,7 +40,7 @@ def test_check_evidence_verifies_quote_matching_extracted_achievement():
     assert report.all_verified is True
 
 
-def test_check_evidence_flags_quote_not_in_extracted_fields():
+def test_check_evidence_flags_quote_not_in_raw_cv_text():
     judge_result = JudgeResult(
         candidate_id="c1",
         tier=Tier.STRONG_FIT,
@@ -59,14 +59,7 @@ def test_check_evidence_flags_quote_not_in_extracted_fields():
 
 
 def test_check_evidence_verifies_quote_despite_whitespace_differences():
-    profile = _profile(
-        work_history=[
-            WorkHistoryEntry(
-                title="Engineer", company="Acme Corp", start_date="2019", end_date="2022",
-                achievements=["Reduced latency by 40%"],
-            )
-        ],
-    )
+    profile = _profile(raw_cv_text="Daniel Taylor\nReduced latency by 40%")
     judge_result = JudgeResult(
         candidate_id="c1",
         tier=Tier.STRONG_FIT,
@@ -84,20 +77,48 @@ def test_check_evidence_verifies_quote_despite_whitespace_differences():
     assert report.all_verified is True
 
 
-def test_check_evidence_verifies_quote_matching_bare_skill():
-    # A quote that's just one of the extracted skills tokens should verify too,
-    # since skills are part of the extracted-fields text being checked against.
-    profile = _profile(skills=["Python", "Kubernetes"])
+def test_check_evidence_verifies_quote_from_summary_section_not_captured_by_extractor():
+    # A quote genuinely sourced from a resume section the extractor never
+    # parses into a structured field (e.g. a summary/profile paragraph) must
+    # still verify, since it's checked against the real resume text directly.
+    profile = _profile(
+        raw_cv_text=(
+            "Daniel Taylor\nPROFESSIONAL SUMMARY\n"
+            "Results-driven engineer with 4+ years of Python experience.\nSKILLS\nPython"
+        ),
+    )
     judge_result = JudgeResult(
         candidate_id="c1",
         tier=Tier.STRONG_FIT,
         rating=8,
-        evidence=[EvidenceClaim(claim="Has Kubernetes experience", quote="Kubernetes")],
+        evidence=[
+            EvidenceClaim(
+                claim="Has years of experience",
+                quote="Results-driven engineer with 4+ years of Python experience.",
+            )
+        ],
     )
 
     report = check_evidence(judge_result, profile)
 
     assert report.all_verified is True
+
+
+def test_check_evidence_flags_quote_copied_from_structured_profile_syntax():
+    # A quote drawn from the Judge prompt's "structured profile" block (Python
+    # list/dict rendering) rather than the resume text itself must still be
+    # flagged, even though the underlying skill is real and in profile.skills.
+    profile = _profile(skills=["Python", "Kubernetes"])
+    judge_result = JudgeResult(
+        candidate_id="c1",
+        tier=Tier.STRONG_FIT,
+        rating=8,
+        evidence=[EvidenceClaim(claim="Has Kubernetes experience", quote="skills: ['Kubernetes']")],
+    )
+
+    report = check_evidence(judge_result, profile)
+
+    assert report.all_verified is False
 
 
 def test_filter_verified_evidence_removes_only_unverified_claims():

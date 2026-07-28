@@ -13,38 +13,27 @@ def _normalize_whitespace(text: str) -> str:
     return _WHITESPACE_RE.sub(" ", text).strip()
 
 
-def _build_extracted_profile_text(profile: CandidateProfile) -> str:
-    """Render the CV-extractor's parsed fields as text to verify Judge quotes against.
-
-    Uses the extracted (skills/work_history/education/projects) fields rather than
-    profile.raw_cv_text. Note: this means a quote is "verified" if it matches what
-    the extractor parsed, not necessarily what the original resume said - an
-    extractor paraphrase or error would pass through as verified.
-    """
-    parts = [", ".join(profile.skills)]
-    for entry in profile.work_history:
-        parts.append(f"{entry.title} at {entry.company}")
-        parts.extend(entry.achievements)
-    for entry in profile.education:
-        parts.append(f"{entry.degree}, {entry.institution}")
-    for entry in profile.projects:
-        parts.append(entry.name)
-        parts.append(entry.description)
-        if entry.tech:
-            parts.append(", ".join(entry.tech))
-    return "\n".join(parts)
-
-
 def check_evidence(
     judge_result: JudgeResult,
     profile: CandidateProfile,
     threshold: float = DEFAULT_THRESHOLD,
 ) -> HallucinationReport:
-    normalized_profile_text = _normalize_whitespace(_build_extracted_profile_text(profile))
+    """Verify each Judge quote against the candidate's actual resume text.
+
+    Uses profile.raw_cv_text, not the CV-extractor's parsed fields - a genuine,
+    verbatim quote is only ever genuine because it's copied from the resume
+    itself, so raw_cv_text is the only source that can verify a quote from ANY
+    resume section regardless of how (or whether) the extractor captured it.
+    Known trade-off: if the extractor mis-transcribes something and the Judge
+    echoes that error into a quote, it won't be caught here - but the Judge is
+    prompted to quote only from the resume text, not the extracted fields, so
+    this only matters if the Judge disobeys that instruction.
+    """
+    normalized_cv_text = _normalize_whitespace(profile.raw_cv_text)
     unverified = []
     for claim in judge_result.evidence:
         normalized_quote = _normalize_whitespace(claim.quote)
-        score = fuzz.partial_ratio(normalized_quote, normalized_profile_text)
+        score = fuzz.partial_ratio(normalized_quote, normalized_cv_text)
         if score < threshold:
             unverified.append(claim.quote)
     return HallucinationReport(candidate_id=judge_result.candidate_id, unverified_quotes=unverified)

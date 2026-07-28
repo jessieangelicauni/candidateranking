@@ -7,6 +7,11 @@ from evidencerank.llm import resolve_model_name
 from evidencerank.models import ContactInfo, ExtractedProfileFields
 
 
+def test_cv_extractor_prompt_covers_nonstandard_work_history_headings():
+    assert "regardless of its heading" in CV_EXTRACTOR_PROMPT
+    assert "Internships / Experience" in CV_EXTRACTOR_PROMPT
+
+
 def test_extract_cv_assembles_candidate_profile(monkeypatch):
     extracted = ExtractedProfileFields(
         contact=ContactInfo(name="Jane Doe", email="jane@example.com"),

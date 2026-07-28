@@ -82,13 +82,19 @@ tech-adjacent but don't individually match specific required skills like "Machin
 Learning" or "PyTorch" will fail even if a naive whole-list comparison would look
 superficially similar.) The
 hallucination checker's minimum fuzzy-match score for a quoted piece of evidence to
-count as verified is `85.0`. Verification compares each quote against the
-CV-extractor's parsed fields (`skills`/`work_history`/`education`/`projects`), not
-the raw resume text — this means a genuine, verbatim quote sourced from a part of
-the resume the extractor doesn't capture (e.g. a summary/intro paragraph, since
-there's no extracted field for it) will always fail verification even though it's
-not actually hallucinated. It also means an extractor paraphrase or error would
-pass through as "verified" without being checked against the true source text.
+count as verified is `85.0`. Verification compares each quote against the candidate's
+raw resume text (`profile.raw_cv_text`), not the CV-extractor's parsed fields — a
+genuine, verbatim quote is only ever genuine because it's copied from the resume
+itself, so this verifies a quote from any resume section regardless of how (or
+whether) the extractor captured it, closing the false-positive gap the old
+extracted-fields comparison had for sections the extractor didn't parse into a
+structured field (e.g. a summary paragraph or a skills-category header line). The
+trade-off: if the extractor mis-transcribes something and the Judge echoes that
+error into a quote, it won't be caught here — but the Judge is prompted to quote
+only from the resume text, not the extracted fields, so this only matters if the
+Judge disobeys that instruction (e.g. by echoing a parsed/paraphrased field like
+`education.degree` instead of the source text — the checker still correctly flags
+that case, since it won't fuzzy-match the raw resume).
 
 `--llm-concurrency` (default `4`) bounds how many candidates' `extract_profiles`
 and `judge` LLM calls run concurrently, using LangChain's `Runnable.batch()`

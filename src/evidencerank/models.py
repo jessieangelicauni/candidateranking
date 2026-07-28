@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from enum import Enum
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class ContactInfo(BaseModel):
@@ -76,6 +76,11 @@ class JudgeVerdict(BaseModel):
     tier: Tier
     rating: int = Field(ge=1, le=10)
     evidence: list[EvidenceClaim]
+
+    @field_validator("evidence")
+    @classmethod
+    def _drop_blank_quotes(cls, evidence: list[EvidenceClaim]) -> list[EvidenceClaim]:
+        return [claim for claim in evidence if claim.quote.strip()]
 
 
 class JudgeResult(JudgeVerdict):
