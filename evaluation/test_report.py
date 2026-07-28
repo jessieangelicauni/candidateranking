@@ -58,7 +58,6 @@ def test_compute_pipeline_stats_counts_candidates(tmp_path):
         "passed_prefilter": 2,
         "dropped_prefilter": 1,
         "evaluated_by_judge": 2,
-        "hallucination_flagged": 1,
         "hallucination_rate": 0.5,
     }
 

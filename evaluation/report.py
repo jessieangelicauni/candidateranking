@@ -31,7 +31,6 @@ def compute_pipeline_stats(report_path: str | Path) -> dict:
         "passed_prefilter": total_candidates - dropped_prefilter,
         "dropped_prefilter": dropped_prefilter,
         "evaluated_by_judge": evaluated_by_judge,
-        "hallucination_flagged": hallucination_flagged,
         "hallucination_rate": hallucination_rate,
     }
 
@@ -111,8 +110,7 @@ def build_eval_markdown_report(report_paths: list[str | Path]) -> str:
         f"| Passed pre-filter | {stats['passed_prefilter']} |",
         f"| Dropped by pre-filter | {stats['dropped_prefilter']} |",
         f"| Evaluated by Judge | {stats['evaluated_by_judge']} |",
-        f"| Hallucination Rate | {stats['hallucination_rate']:.1%} "
-        f"({stats['hallucination_flagged']}/{stats['evaluated_by_judge']}) |",
+        f"| Hallucination Rate | {stats['hallucination_rate']:.1%} |",
         "",
         "## GEval Metrics",
         "",

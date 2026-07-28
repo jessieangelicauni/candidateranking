@@ -180,13 +180,8 @@ them. `--llm-concurrency` and `--out` work the same as the other commands.
 
 If you'd rather drive this manually (e.g. against runs you already have, or with
 resumes/JD changing between runs), run the pipeline yourself N times, renaming
-`report.json` after each run since every run overwrites it, then either call
-`evidencerank-eval-report` (below) with all the paths, or:
-
-```python
-from evaluation.rank_stability import rank_stability
-print(rank_stability(["run1.json", "run2.json", "run3.json"]))
-```
+`report.json` after each run since every run overwrites it, then call
+`evidencerank-eval-report` (below) with all the paths.
 
 ### Evaluation metric report
 
