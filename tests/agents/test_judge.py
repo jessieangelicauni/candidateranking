@@ -193,6 +193,29 @@ def test_judge_candidate_prompt_requires_claim_relevant_quotes(monkeypatch):
     assert "results-driven engineer with 4+ years of experience" in prompt_sent
 
 
+def test_judge_candidate_prompt_weighs_applied_experience_over_skill_list_mentions(monkeypatch):
+    verdict = JudgeVerdict(
+        tier=Tier.STRONG_FIT,
+        rating=8,
+        evidence=[EvidenceClaim(claim="Has Python experience", quote="5 years of Python experience")],
+    )
+    fake_structured_model = MagicMock()
+    fake_structured_model.invoke.return_value = verdict
+    fake_chat_model = MagicMock()
+    fake_chat_model.with_structured_output.return_value = fake_structured_model
+    monkeypatch.setattr(
+        "evidencerank.agents.judge.get_chat_model",
+        lambda stage: fake_chat_model,
+    )
+    jd = JDRequirements(title="ML Engineer", required_skills=["Python"])
+
+    judge_candidate(jd, _make_profile())
+
+    prompt_sent = fake_structured_model.invoke.call_args[0][0]
+    assert "weak evidence of genuine proficiency" in prompt_sent
+    assert "counts far more heavily toward the rating than the same skill merely being listed" in prompt_sent
+
+
 def test_judge_candidates_batches_prompts_and_returns_results_by_candidate_id(monkeypatch):
     verdict_a = JudgeVerdict(
         tier=Tier.STRONG_FIT,

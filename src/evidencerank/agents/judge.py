@@ -22,6 +22,14 @@ experience in general (e.g. "results-driven engineer with 4+ years of experience
 sufficient evidence — the quote must itself name machine learning, a related framework, or a \
 related task.
 
+When a required skill or technology appears only as a bare item in a skills list, with no \
+accompanying description of it being applied, treat that as weak evidence of genuine \
+proficiency. A required skill demonstrated within a work history entry or project description — \
+actually used to build, train, deploy, analyze, or ship something — counts far more heavily \
+toward the rating than the same skill merely being listed. Score a candidate lower on a \
+requirement that only shows up as a skills-list item and never appears in the context of real \
+applied work.
+
 Job requirements:
 {jd_requirements}
 
