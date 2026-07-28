@@ -38,7 +38,7 @@ Assign a tier (Strong Fit, Moderate Fit, Weak Fit, Not a Fit) and a rating from 
 """
 
 
-def judge_candidate(jd: JDRequirements, profile: CandidateProfile) -> JudgeResult:
+def _build_judge_prompt(jd: JDRequirements, profile: CandidateProfile) -> str:
     contact = profile.contact
     if not contact.name:
         probable_name = detect_probable_name(profile.raw_cv_text)
@@ -61,8 +61,7 @@ def judge_candidate(jd: JDRequirements, profile: CandidateProfile) -> JudgeResul
         entry_dump["description"] = redact_identity(entry.description, contact)
         redacted_projects.append(entry_dump)
 
-    model = get_chat_model("judge").with_structured_output(JudgeVerdict)
-    prompt = JUDGE_PROMPT.format(
+    return JUDGE_PROMPT.format(
         jd_requirements=jd.model_dump_json(),
         redacted_cv_text=redacted_text,
         skills=profile.skills,
@@ -70,5 +69,22 @@ def judge_candidate(jd: JDRequirements, profile: CandidateProfile) -> JudgeResul
         education=[entry.model_dump() for entry in profile.education],
         projects=redacted_projects,
     )
+
+
+def judge_candidate(jd: JDRequirements, profile: CandidateProfile) -> JudgeResult:
+    model = get_chat_model("judge").with_structured_output(JudgeVerdict)
+    prompt = _build_judge_prompt(jd, profile)
     verdict = model.invoke(prompt)
     return JudgeResult(candidate_id=profile.candidate_id, **verdict.model_dump())
+
+
+def judge_candidates(
+    jd: JDRequirements, profiles: list[CandidateProfile], max_concurrency: int
+) -> dict[str, JudgeResult]:
+    model = get_chat_model("judge").with_structured_output(JudgeVerdict)
+    prompts = [_build_judge_prompt(jd, profile) for profile in profiles]
+    verdicts = model.batch(prompts, config={"max_concurrency": max_concurrency})
+    return {
+        profile.candidate_id: JudgeResult(candidate_id=profile.candidate_id, **verdict.model_dump())
+        for profile, verdict in zip(profiles, verdicts)
+    }

@@ -1,6 +1,6 @@
 from unittest.mock import MagicMock
 
-from evidencerank.agents.judge import judge_candidate
+from evidencerank.agents.judge import judge_candidate, judge_candidates
 from evidencerank.models import (
     ContactInfo,
     EvidenceClaim,
@@ -191,3 +191,47 @@ def test_judge_candidate_prompt_requires_claim_relevant_quotes(monkeypatch):
     prompt_sent = fake_structured_model.invoke.call_args[0][0]
     assert "directly demonstrate the specific skill, technology, or responsibility" in prompt_sent
     assert "results-driven engineer with 4+ years of experience" in prompt_sent
+
+
+def test_judge_candidates_batches_prompts_and_returns_results_by_candidate_id(monkeypatch):
+    verdict_a = JudgeVerdict(
+        tier=Tier.STRONG_FIT,
+        rating=8,
+        evidence=[EvidenceClaim(claim="Has Python experience", quote="5 years of Python experience")],
+    )
+    verdict_b = JudgeVerdict(
+        tier=Tier.WEAK_FIT,
+        rating=3,
+        evidence=[EvidenceClaim(claim="Has DevOps experience", quote="9 years of DevOps experience")],
+    )
+    fake_structured_model = MagicMock()
+    fake_structured_model.batch.return_value = [verdict_a, verdict_b]
+    fake_chat_model = MagicMock()
+    fake_chat_model.with_structured_output.return_value = fake_structured_model
+    monkeypatch.setattr(
+        "evidencerank.agents.judge.get_chat_model",
+        lambda stage: fake_chat_model,
+    )
+    jd = JDRequirements(title="ML Engineer", required_skills=["Python"])
+    profile_a = _make_profile()
+    profile_b = CandidateProfile(
+        candidate_id="c2",
+        raw_cv_text="Allison Doyle\nDevOps Engineer\n9 years of DevOps experience",
+        contact=ContactInfo(name="Allison Doyle"),
+        skills=["DevOps"],
+    )
+
+    results = judge_candidates(jd, [profile_a, profile_b], max_concurrency=4)
+
+    assert set(results.keys()) == {"c1", "c2"}
+    assert results["c1"].candidate_id == "c1"
+    assert results["c1"].tier == Tier.STRONG_FIT
+    assert results["c1"].rating == 8
+    assert results["c2"].candidate_id == "c2"
+    assert results["c2"].tier == Tier.WEAK_FIT
+    assert results["c2"].rating == 3
+    call_args, call_kwargs = fake_structured_model.batch.call_args
+    prompts_sent = call_args[0]
+    assert len(prompts_sent) == 2
+    assert "Allison Doyle" not in prompts_sent[1]
+    assert call_kwargs["config"] == {"max_concurrency": 4}
