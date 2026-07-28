@@ -82,7 +82,13 @@ tech-adjacent but don't individually match specific required skills like "Machin
 Learning" or "PyTorch" will fail even if a naive whole-list comparison would look
 superficially similar.) The
 hallucination checker's minimum fuzzy-match score for a quoted piece of evidence to
-count as verified against the candidate's raw CV text is `85.0`.
+count as verified is `85.0`. Verification compares each quote against the
+CV-extractor's parsed fields (`skills`/`work_history`/`education`/`projects`), not
+the raw resume text — this means a genuine, verbatim quote sourced from a part of
+the resume the extractor doesn't capture (e.g. a summary/intro paragraph, since
+there's no extracted field for it) will always fail verification even though it's
+not actually hallucinated. It also means an extractor paraphrase or error would
+pass through as "verified" without being checked against the true source text.
 
 `--llm-concurrency` (default `4`) bounds how many candidates' `extract_profiles`
 and `judge` LLM calls run concurrently, using LangChain's `Runnable.batch()`

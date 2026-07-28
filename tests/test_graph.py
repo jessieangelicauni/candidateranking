@@ -92,15 +92,15 @@ def test_graph_runs_extract_prefilter_judge_hallucination_calibrate(monkeypatch)
             for i, r in enumerate(judge_results)
         ]
 
-    # Records the (candidate_id, raw_cv_text) pairs check_evidence was called
-    # with, so we can assert each candidate was checked against its OWN raw
-    # CV text rather than a mismatched/swapped one. Also flags any evidence
+    # Records the (candidate_id, profile) pairs check_evidence was called
+    # with, so we can assert each candidate was checked against its OWN
+    # profile rather than a mismatched/swapped one. Also flags any evidence
     # quote starting with "FABRICATED" as unverified, simulating a real
     # hallucination-checker finding.
-    hallucination_calls: list[tuple[str, str]] = []
+    hallucination_calls: list[tuple[str, CandidateProfile]] = []
 
-    def fake_check_evidence(judge_result, raw_cv_text, threshold):
-        hallucination_calls.append((judge_result.candidate_id, raw_cv_text))
+    def fake_check_evidence(judge_result, profile, threshold):
+        hallucination_calls.append((judge_result.candidate_id, profile))
         unverified = [
             claim.quote for claim in judge_result.evidence if claim.quote.startswith("FABRICATED")
         ]
@@ -138,11 +138,11 @@ def test_graph_runs_extract_prefilter_judge_hallucination_calibrate(monkeypatch)
     assert {r.candidate_id for r in pooled_judge_results} == {"strong_a", "strong_b"}
 
     # Regression guard 2: each candidate's hallucination check must be run
-    # against its OWN raw CV text, not a swapped/mismatched one.
-    recorded_raw_text_by_candidate = dict(hallucination_calls)
+    # against its OWN profile, not a swapped/mismatched one.
+    recorded_profile_by_candidate = dict(hallucination_calls)
     assert len(hallucination_calls) == 2
     for candidate_id in ("strong_a", "strong_b"):
-        assert recorded_raw_text_by_candidate[candidate_id] == raw_resumes[candidate_id]
+        assert recorded_profile_by_candidate[candidate_id].raw_cv_text == raw_resumes[candidate_id]
 
     # Regression guard 3: hallucination_reports keeps the ORIGINAL unverified
     # quote for audit, even though it gets stripped from what calibrate/final
@@ -217,7 +217,7 @@ def test_graph_forwards_max_concurrency_value_to_batch_functions(monkeypatch):
             for i, r in enumerate(judge_results)
         ]
 
-    def fake_check_evidence(judge_result, raw_cv_text, threshold):
+    def fake_check_evidence(judge_result, profile, threshold):
         return HallucinationReport(candidate_id=judge_result.candidate_id, unverified_quotes=[])
 
     _patch_pipeline_fakes(

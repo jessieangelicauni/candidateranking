@@ -84,8 +84,8 @@ def hallucination_check_node(state: PipelineState) -> dict:
     reports = {}
     filtered_judge_results = {}
     for candidate_id, judge_result in state["judge_results"].items():
-        raw_text = state["profiles"][candidate_id].raw_cv_text
-        report = check_evidence(judge_result, raw_text, threshold=threshold)
+        profile = state["profiles"][candidate_id]
+        report = check_evidence(judge_result, profile, threshold=threshold)
         reports[candidate_id] = report
         filtered_judge_results[candidate_id] = filter_verified_evidence(judge_result, report)
     return {"hallucination_reports": reports, "judge_results": filtered_judge_results}

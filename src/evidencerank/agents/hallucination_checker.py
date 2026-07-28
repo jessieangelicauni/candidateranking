@@ -2,7 +2,7 @@ import re
 
 from rapidfuzz import fuzz
 
-from evidencerank.models import HallucinationReport, JudgeResult
+from evidencerank.models import CandidateProfile, HallucinationReport, JudgeResult
 
 DEFAULT_THRESHOLD = 85.0
 
@@ -13,16 +13,38 @@ def _normalize_whitespace(text: str) -> str:
     return _WHITESPACE_RE.sub(" ", text).strip()
 
 
+def _build_extracted_profile_text(profile: CandidateProfile) -> str:
+    """Render the CV-extractor's parsed fields as text to verify Judge quotes against.
+
+    Uses the extracted (skills/work_history/education/projects) fields rather than
+    profile.raw_cv_text. Note: this means a quote is "verified" if it matches what
+    the extractor parsed, not necessarily what the original resume said - an
+    extractor paraphrase or error would pass through as verified.
+    """
+    parts = [", ".join(profile.skills)]
+    for entry in profile.work_history:
+        parts.append(f"{entry.title} at {entry.company}")
+        parts.extend(entry.achievements)
+    for entry in profile.education:
+        parts.append(f"{entry.degree}, {entry.institution}")
+    for entry in profile.projects:
+        parts.append(entry.name)
+        parts.append(entry.description)
+        if entry.tech:
+            parts.append(", ".join(entry.tech))
+    return "\n".join(parts)
+
+
 def check_evidence(
     judge_result: JudgeResult,
-    raw_cv_text: str,
+    profile: CandidateProfile,
     threshold: float = DEFAULT_THRESHOLD,
 ) -> HallucinationReport:
-    normalized_cv_text = _normalize_whitespace(raw_cv_text)
+    normalized_profile_text = _normalize_whitespace(_build_extracted_profile_text(profile))
     unverified = []
     for claim in judge_result.evidence:
         normalized_quote = _normalize_whitespace(claim.quote)
-        score = fuzz.partial_ratio(normalized_quote, normalized_cv_text)
+        score = fuzz.partial_ratio(normalized_quote, normalized_profile_text)
         if score < threshold:
             unverified.append(claim.quote)
     return HallucinationReport(candidate_id=judge_result.candidate_id, unverified_quotes=unverified)
