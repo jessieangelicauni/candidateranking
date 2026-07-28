@@ -79,6 +79,14 @@ the embedding pre-filter; `--hallucination-threshold` (default `85.0`) sets the 
 fuzzy-match score for a quoted piece of evidence to count as verified against the
 candidate's raw CV text.
 
+`--llm-concurrency` (default `4`) bounds how many candidates' `extract_profiles`
+and `judge` LLM calls run concurrently, using LangChain's `Runnable.batch()`
+instead of one sequential call per candidate. The default matches Ollama's own
+default concurrent-request limit (`OLLAMA_NUM_PARALLEL`) on recent versions —
+raising `--llm-concurrency` past what Ollama and your GPU's VRAM can actually
+run at once adds contention overhead without speeding anything up, so tune it
+alongside `OLLAMA_NUM_PARALLEL` rather than in isolation.
+
 **Note:** `report.json`'s `profiles` section contains unredacted candidate identity
 data (name, email, phone, location, raw CV text) — this is an intentional full
 audit-trail artifact. It is not the same view the Judge model sees (that input is
