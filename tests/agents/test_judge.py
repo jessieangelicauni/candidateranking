@@ -193,6 +193,36 @@ def test_judge_candidate_prompt_forbids_quoting_full_structured_lists(monkeypatc
     assert "quoting the entire skills list verbatim, however many items it contains" in prompt_sent
 
 
+def test_judge_candidate_prompt_forbids_quoting_paraphrased_prose_fields(monkeypatch):
+    # skills/work_history are rendered as Python list/dict syntax, an obvious
+    # tell that they aren't resume text. education.degree, by contrast, is a
+    # plain human-readable string (e.g. "Master's Degree, Computer Science")
+    # that the CV-extractor may have paraphrased from the resume's actual
+    # wording (e.g. "M.Sc. in Computer Science") - the prompt must warn
+    # against echoing it as if it were a genuine quote too.
+    verdict = JudgeVerdict(
+        tier=Tier.STRONG_FIT,
+        rating=8,
+        evidence=[EvidenceClaim(claim="Has Python experience", quote="5 years of Python experience")],
+    )
+    fake_structured_model = MagicMock()
+    fake_structured_model.invoke.return_value = verdict
+    fake_chat_model = MagicMock()
+    fake_chat_model.with_structured_output.return_value = fake_structured_model
+    monkeypatch.setattr(
+        "evidencerank.agents.judge.get_chat_model",
+        lambda stage: fake_chat_model,
+    )
+    jd = JDRequirements(title="ML Engineer", required_skills=["Python"])
+
+    judge_candidate(jd, _make_profile())
+
+    prompt_sent = fake_structured_model.invoke.call_args[0][0]
+    assert "education" in prompt_sent.lower()
+    assert "M.Sc." in prompt_sent
+    assert "Master's Degree, Computer Science" in prompt_sent
+
+
 def test_judge_candidate_prompt_requires_contiguous_non_empty_quotes(monkeypatch):
     verdict = JudgeVerdict(
         tier=Tier.STRONG_FIT,

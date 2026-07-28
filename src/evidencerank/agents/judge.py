@@ -18,6 +18,13 @@ appear in the resume text. For example, quoting "skills: ['TensorFlow']" is NOT 
 is Python list syntax from the structured profile, not resume text — and the same rule applies \
 to quoting the entire skills list verbatim, however many items it contains.
 
+This also applies to structured-profile fields that read as ordinary prose rather than a \
+list, like education.degree — that string may be the CV-extractor's own paraphrase of the \
+resume's actual wording (e.g. normalizing "M.Sc." to "Master's Degree, Computer Science") and is \
+not guaranteed to match the resume text. Never quote an education, work_history, or projects \
+field directly, even when it looks like a normal sentence — find and quote the equivalent line \
+from the resume text block instead.
+
 Every quote must be a single, continuous span of text copied from ONE location in the resume — \
 never join two or more separate lines, bullets, or sections together into one quote, even if \
 they appear close together (e.g. immediately before and after an intervening line). If the two \
