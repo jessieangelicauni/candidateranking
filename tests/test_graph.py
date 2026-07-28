@@ -252,3 +252,69 @@ def test_graph_shortlists_top_10_by_rating_before_calibrating(monkeypatch):
     assert set(final_state["judge_results"].keys()) == expected_shortlist | expected_cut
     # hallucination check still runs against the full judged pool, not just the shortlist.
     assert set(final_state["hallucination_reports"].keys()) == expected_shortlist | expected_cut
+
+
+def test_graph_forwards_max_concurrency_value_to_batch_functions(monkeypatch):
+    jd = JDRequirements(title="ML Engineer", required_skills=["Python"])
+    raw_resumes = {"c1": "Python resume"}
+
+    extract_calls: list[int] = []
+
+    def fake_extract_cvs(candidates, max_concurrency):
+        extract_calls.append(max_concurrency)
+        return {
+            candidate_id: CandidateProfile(
+                candidate_id=candidate_id,
+                raw_cv_text=raw_text,
+                contact=ContactInfo(name=candidate_id),
+                skills=["Python"],
+            )
+            for candidate_id, raw_text in candidates.items()
+        }
+
+    def fake_prefilter_candidates(jd_required_skills, candidate_skills, threshold):
+        return {
+            candidate_id: PrefilterResult(candidate_id=candidate_id, similarity=0.9, passed=True)
+            for candidate_id in candidate_skills
+        }
+
+    judge_calls: list[int] = []
+
+    def fake_judge_candidates(jd_requirements, profiles, max_concurrency):
+        judge_calls.append(max_concurrency)
+        return {
+            profile.candidate_id: JudgeResult(
+                candidate_id=profile.candidate_id,
+                tier=Tier.STRONG_FIT,
+                rating=9,
+                evidence=[EvidenceClaim(claim="Strong fit", quote="Python")],
+            )
+            for profile in profiles
+        }
+
+    def fake_calibrate_pool(jd_requirements, judge_results):
+        return [
+            CalibratedResult(
+                candidate_id=r.candidate_id, final_rank=i + 1, tier=r.tier,
+                rating=r.rating, calibration_notes="Ranked",
+            )
+            for i, r in enumerate(judge_results)
+        ]
+
+    def fake_check_evidence(judge_result, raw_cv_text, threshold):
+        return HallucinationReport(candidate_id=judge_result.candidate_id, unverified_quotes=[])
+
+    _patch_pipeline_fakes(
+        monkeypatch,
+        extract_cvs=fake_extract_cvs,
+        prefilter_candidates=fake_prefilter_candidates,
+        judge_candidates=fake_judge_candidates,
+        calibrate_pool=fake_calibrate_pool,
+        check_evidence=fake_check_evidence,
+    )
+
+    graph = build_graph()
+    graph.invoke({"jd": jd, "raw_resumes": raw_resumes, "max_concurrency": 8})
+
+    assert extract_calls == [8]
+    assert judge_calls == [8]

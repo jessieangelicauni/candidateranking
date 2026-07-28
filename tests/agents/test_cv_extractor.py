@@ -216,3 +216,32 @@ def test_cached_extract_cvs_mixed_hits_and_misses_only_batches_misses(tmp_path, 
     prompts_sent = call_args[0]
     assert len(prompts_sent) == 1
     assert candidates["c2"] in prompts_sent[0]
+
+
+def test_cached_extract_cvs_preserves_input_order_regardless_of_cache_state(tmp_path, monkeypatch):
+    candidates = {
+        "c1": "John Smith resume text...",  # cache miss (comes first in input order)
+        "c2": "Jane Doe resume text...",    # cache hit (comes second in input order)
+    }
+    cached_fields_c2 = {
+        "contact": {"name": "Jane Doe", "email": "", "phone": "", "location": ""},
+        "skills": ["Python"], "work_history": [], "education": [], "projects": [],
+    }
+    key_c2 = compute_cache_key(
+        candidates["c2"], CV_EXTRACTOR_PROMPT, resolve_model_name("cv_extractor"),
+        json.dumps(ExtractedProfileFields.model_json_schema(), sort_keys=True),
+    )
+    save_cached_json(tmp_path, key_c2, cached_fields_c2)
+
+    extracted_c1 = ExtractedProfileFields(contact=ContactInfo(name="John Smith"), skills=["Go"])
+    fake_structured_model = MagicMock()
+    fake_structured_model.batch.return_value = [extracted_c1]
+    fake_chat_model = MagicMock()
+    fake_chat_model.with_structured_output.return_value = fake_structured_model
+    monkeypatch.setattr(
+        "evidencerank.agents.cv_extractor.get_chat_model", lambda stage: fake_chat_model
+    )
+
+    profiles = cached_extract_cvs(candidates, max_concurrency=4, cache_dir=tmp_path)
+
+    assert list(profiles.keys()) == ["c1", "c2"]

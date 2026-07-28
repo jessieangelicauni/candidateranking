@@ -18,7 +18,7 @@ load_dotenv()
 @click.option("--out-md", default="report.md", type=click.Path())
 @click.option("--prefilter-threshold", default=0.5, type=float)
 @click.option("--hallucination-threshold", default=85.0, type=float)
-@click.option("--llm-concurrency", default=4, type=int)
+@click.option("--llm-concurrency", default=4, type=click.IntRange(min=1))
 @click.option("--with-eval-report", is_flag=True, default=False)
 @click.option("--out-eval-report", default="eval_report.md", type=click.Path())
 def rank(

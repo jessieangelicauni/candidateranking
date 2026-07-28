@@ -255,3 +255,24 @@ def test_rank_command_defaults_llm_concurrency_to_four(tmp_path, monkeypatch):
     assert result.exit_code == 0, result.output
     invoked_state = fake_graph.invoke.call_args[0][0]
     assert invoked_state["max_concurrency"] == 4
+
+
+def test_rank_command_rejects_non_positive_llm_concurrency(tmp_path, monkeypatch):
+    jd_path = tmp_path / "jd.txt"
+    jd_path.write_text("Machine Learning Engineer\nPython required", encoding="utf-8")
+    resumes_dir = tmp_path / "resumes"
+    resumes_dir.mkdir()
+    _make_pdf(resumes_dir / "candidate1.pdf", "Candidate One\nPython, PyTorch")
+
+    runner = CliRunner()
+    result = runner.invoke(
+        rank,
+        [
+            "--jd", str(jd_path),
+            "--resumes-dir", str(resumes_dir),
+            "--llm-concurrency", "0",
+        ],
+    )
+
+    assert result.exit_code != 0
+    assert "llm-concurrency" in result.output.lower() or "llm_concurrency" in result.output.lower()

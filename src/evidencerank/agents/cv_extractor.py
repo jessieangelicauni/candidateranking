@@ -86,4 +86,4 @@ def cached_extract_cvs(
             )
             results[candidate_id] = profile
 
-    return results
+    return {candidate_id: results[candidate_id] for candidate_id in candidates}
