@@ -34,7 +34,7 @@ in `src/evidencerank/`, consistent with the existing separation of concerns.
 
 ```
 report.json (run 1) ──┐
-report.json (run 2) ──┼─→ evaluation/report.py ──→ Markdown string ──→ eval_report.md
+report.json (run 2) ──┼─→ evaluation/report.py ──→ Markdown string ──→ evaluation-metric.md
 report.json (run N) ──┘         │
                                  ├─ compute_geval_scores(report[0])     (GEval, via Ollama)
                                  ├─ compute_pipeline_stats(report[0])   (pure JSON aggregation)
@@ -96,7 +96,7 @@ past `report.json`.
 - `click` command `eval_report`:
   - `--reports` (required, variadic `click.Path(exists=True)`) — one or more `report.json`
     paths; first path is primary (GEval + pipeline stats), all paths feed rank stability.
-  - `--out` (default `eval_report.md`).
+  - `--out` (default `evaluation-metric.md`).
   - Calls `write_eval_markdown_report`, echoes the output path on success.
 - Registered in `pyproject.toml`'s `[project.scripts]` as:
   ```
@@ -113,7 +113,7 @@ past `report.json`.
 1. User runs the production pipeline one or more times (`uv run evidencerank ...`), producing
    `report.json` per run.
 2. User runs `uv run evidencerank-eval-report --reports report1.json --reports report2.json
-   --out eval_report.md` (repeat `--reports` once per report path — one path gives GEval
+   --out evaluation-metric.md` (repeat `--reports` once per report path — one path gives GEval
    metrics + pipeline stats only; 2+ paths also add rank stability).
 3. `report.py` loads the primary report, builds GEval test cases from `judge_results` +
    `profiles` + `jd`, and calls the three GEval metrics — each metric call round-trips to the

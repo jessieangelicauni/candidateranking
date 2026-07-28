@@ -4,7 +4,7 @@
 
 **Goal:** Fix the root causes behind bad GEval scores (Groundedness 7.7% pass, RecruiterAlignment 11.5% pass, EvidenceRelevancy 0% pass, 14/26 hallucination-flagged) found in a real pipeline run: an unscoped Judge quoting instruction, weak claim-to-evidence relevance, an audit-only hallucination check with no effect on ranking, whitespace-fragile fuzzy matching, and no stage-latency visibility.
 
-**Architecture:** Prompt-only fixes to the Judge (`src/evidencerank/agents/judge.py`) to scope quoting and require relevance; a pure-function evidence filter (`src/evidencerank/agents/hallucination_checker.py`) plus a reordered LangGraph pipeline (`judge → hallucination_check → calibrate`, was `judge → calibrate → hallucination_check`) so unverified evidence is stripped before calibration instead of only being reported after; a new Markdown column surfacing the hallucination outcome per candidate; and per-stage wall-clock timing threaded through `report.json` into `eval_report.md`.
+**Architecture:** Prompt-only fixes to the Judge (`src/evidencerank/agents/judge.py`) to scope quoting and require relevance; a pure-function evidence filter (`src/evidencerank/agents/hallucination_checker.py`) plus a reordered LangGraph pipeline (`judge → hallucination_check → calibrate`, was `judge → calibrate → hallucination_check`) so unverified evidence is stripped before calibration instead of only being reported after; a new Markdown column surfacing the hallucination outcome per candidate; and per-stage wall-clock timing threaded through `report.json` into `evaluation-metric.md`.
 
 **Tech Stack:** Python 3.11, LangGraph (`StateGraph`), Pydantic v2, `rapidfuzz`, `pytest`, `click`, existing `uv` toolchain.
 
@@ -978,7 +978,7 @@ Expected: all tests PASS.
 
 - [ ] **Step 5: Update README**
 
-In `README.md`, in the "Evaluation metric report" section describing what `eval_report.md` contains, add:
+In `README.md`, in the "Evaluation metric report" section describing what `evaluation-metric.md` contains, add:
 
 ```
 When the underlying `report.json` includes per-stage timing (`stage_timings`,
@@ -1008,7 +1008,7 @@ git commit -m "feat: render per-stage timing in the evaluation Markdown report"
 
 **Interfaces:**
 - Consumes: everything built in Tasks 1–6.
-- Produces: a fresh `report.json` / `report.md` / `eval_report.md` for comparison against the pre-fix numbers recorded in this plan's Goal section.
+- Produces: a fresh `report.json` / `report.md` / `evaluation-metric.md` for comparison against the pre-fix numbers recorded in this plan's Goal section.
 
 - [ ] **Step 1: Confirm Ollama is running with the required models**
 
@@ -1026,11 +1026,11 @@ uv run evidencerank \
   --out-md report.md \
   --with-eval-report
 ```
-Expected: exit code 0; `report.json`, `report.md`, `eval_report.md` all written; stdout shows `Running stage: <name>` for all 5 stages.
+Expected: exit code 0; `report.json`, `report.md`, `evaluation-metric.md` all written; stdout shows `Running stage: <name>` for all 5 stages.
 
 - [ ] **Step 3: Compare against the pre-fix baseline**
 
-Open the new `eval_report.md` and compare against this plan's stated baseline (Groundedness 7.7% pass / RecruiterAlignment 11.5% pass / EvidenceRelevancy 0% pass / 14/26 hallucination-flagged). Expected direction: Groundedness pass rate should rise sharply (evidence is now pre-filtered before calibration, per Task 3's noted side effect in the spec); RecruiterAlignment and EvidenceRelevancy should also improve since evidence is both correctly scoped (Task 1) and claim-relevant (Task 1); hallucination-flagged count should drop (Tasks 1 and 2 both reduce false and true positives). Note the new "Stage Timings" section's numbers as the latency baseline going forward.
+Open the new `evaluation-metric.md` and compare against this plan's stated baseline (Groundedness 7.7% pass / RecruiterAlignment 11.5% pass / EvidenceRelevancy 0% pass / 14/26 hallucination-flagged). Expected direction: Groundedness pass rate should rise sharply (evidence is now pre-filtered before calibration, per Task 3's noted side effect in the spec); RecruiterAlignment and EvidenceRelevancy should also improve since evidence is both correctly scoped (Task 1) and claim-relevant (Task 1); hallucination-flagged count should drop (Tasks 1 and 2 both reduce false and true positives). Note the new "Stage Timings" section's numbers as the latency baseline going forward.
 
 - [ ] **Step 4: Record the outcome**
 

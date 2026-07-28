@@ -84,8 +84,8 @@ def test_rank_command_always_writes_eval_report(monkeypatch):
         result = runner.invoke(rank, ["--jd", "jd.txt", "--resumes-dir", "resumes"])
 
         assert result.exit_code == 0, result.output
-        assert Path("eval_report.md").exists()
-        content = Path("eval_report.md").read_text(encoding="utf-8")
+        assert Path("evaluation-metric.md").exists()
+        content = Path("evaluation-metric.md").read_text(encoding="utf-8")
         assert "## Pipeline Stats" in content
         assert "## GEval Metrics" in content
 

@@ -12,7 +12,7 @@ load_dotenv()
 
 OUT_JSON = "report.json"
 OUT_MD = "report.md"
-OUT_EVAL_REPORT = "eval_report.md"
+OUT_EVAL_REPORT = "evaluation-metric.md"
 PREFILTER_THRESHOLD = 0.7
 HALLUCINATION_THRESHOLD = 85.0
 

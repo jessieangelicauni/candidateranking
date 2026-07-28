@@ -6,7 +6,7 @@
 ## Purpose
 
 A pipeline run against the 26 resumes in `resumes/` (see `report.json`, `report.md`,
-`eval_report.md`) scored badly on all three GEval metrics (Groundedness 7.7% pass,
+`evaluation-metric.md`) scored badly on all three GEval metrics (Groundedness 7.7% pass,
 RecruiterAlignment 11.5% pass, EvidenceRelevancy 0% pass) with 14/26 candidates
 hallucination-flagged. Investigation of the actual evidence chains (not just the
 aggregate numbers) found specific, fixable root causes rather than a generic
@@ -49,7 +49,7 @@ sourced, verified, and surfaced.
 - Surfacing the hallucination signal in `report.md` (`src/evidencerank/report.py`).
 - Normalizing text before fuzzy matching to cut false-positive flags
   (`src/evidencerank/agents/hallucination_checker.py`).
-- Per-stage timing captured in `report.json` and rendered in `eval_report.md`
+- Per-stage timing captured in `report.json` and rendered in `evaluation-metric.md`
   (`src/evidencerank/graph.py`, `src/evidencerank/report.py`,
   `evaluation/report.py`).
 
@@ -163,7 +163,7 @@ this key don't break report generation).
 
 1. Re-run `uv run evidencerank ... --with-eval-report` against the same 26
    resumes and JD.
-2. Compare `eval_report.md` before/after: hallucination-flagged count,
+2. Compare `evaluation-metric.md` before/after: hallucination-flagged count,
    Groundedness/RecruiterAlignment/EvidenceRelevancy pass rates, new stage
    timings.
 3. If RecruiterAlignment/EvidenceRelevancy still lag after the prompt fixes,

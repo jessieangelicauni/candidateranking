@@ -11,7 +11,7 @@
 ## Global Constraints
 
 - `--with-eval-report` defaults to off (opt-in) — plain `evidencerank rank` runs must be unaffected: no eval-report file written, no GEval metrics invoked, no `evaluation` import paid for.
-- `--out-eval-report` defaults to `eval_report.md`.
+- `--out-eval-report` defaults to `evaluation-metric.md`.
 - The `evaluation.report` import must be local to the `if with_eval_report:` branch in `rank()`, not a top-of-file import — so running plain `rank` never imports `deepeval`/GEval machinery.
 - On failure inside the eval-report step, let the exception propagate (command exits non-zero) — no try/except swallowing. `report.json`/`report.md` are already written by that point regardless.
 - No changes to `evaluation/report.py`, `evaluation/cli.py`, `evaluation/metrics.py`, `evaluation/rank_stability.py`, `src/evidencerank/graph.py`, or any agent module.
@@ -116,7 +116,7 @@ def test_rank_command_with_eval_report_flag_writes_eval_report(tmp_path, monkeyp
 
     out_json = tmp_path / "out.json"
     out_md = tmp_path / "out.md"
-    out_eval_report = tmp_path / "eval_report.md"
+    out_eval_report = tmp_path / "evaluation-metric.md"
     runner = CliRunner()
     result = runner.invoke(
         rank,
@@ -177,7 +177,7 @@ def test_rank_command_without_eval_report_flag_skips_eval_report(tmp_path, monke
     )
 
     assert result.exit_code == 0, result.output
-    assert not (tmp_path / "eval_report.md").exists()
+    assert not (tmp_path / "evaluation-metric.md").exists()
 ```
 
 Note: `fake_final_state["judge_results"]` is empty in both tests (matching the existing test's fixture) — this means `compute_geval_scores` inside `write_eval_markdown_report` builds zero `LLMTestCase`s, so `metric.measure()` is never called for any of the three GEval metrics. No mocking of `evaluation.metrics` is needed in these tests; the first test exercises the real `write_eval_markdown_report` call end-to-end with zero LLM calls, and still validates that the file is written with real section headers.
@@ -213,7 +213,7 @@ load_dotenv()
 @click.option("--prefilter-threshold", default=0.5, type=float)
 @click.option("--hallucination-threshold", default=85.0, type=float)
 @click.option("--with-eval-report", is_flag=True, default=False)
-@click.option("--out-eval-report", default="eval_report.md", type=click.Path())
+@click.option("--out-eval-report", default="evaluation-metric.md", type=click.Path())
 def rank(
     jd_path,
     resumes_dir,
@@ -270,13 +270,13 @@ In `README.md`, find the "Running the pipeline" section (it currently ends with 
 ```markdown
 
 Pass `--with-eval-report` to also generate the evaluation metric report
-(`eval_report.md` by default, override with `--out-eval-report`) in the same run — see
+(`evaluation-metric.md` by default, override with `--out-eval-report`) in the same run — see
 [Evaluation metric report](#evaluation-metric-report) below for what it contains. This
 requires `ollama serve` running locally with the eval judge model available (same as the
 standalone `evidencerank-eval-report` command).
 ```
 
-In the existing "Evaluation metric report" section (added by the prior eval-metric-report feature), after the first code block (the single-run `evidencerank-eval-report --reports report.json --out eval_report.md` example) and before the "Pass `--reports` once per report path" paragraph, add one sentence noting the new shortcut:
+In the existing "Evaluation metric report" section (added by the prior eval-metric-report feature), after the first code block (the single-run `evidencerank-eval-report --reports report.json --out evaluation-metric.md` example) and before the "Pass `--reports` once per report path" paragraph, add one sentence noting the new shortcut:
 
 ```markdown
 
@@ -310,8 +310,8 @@ uv run evidencerank \
   --out-json /tmp/manual_report.json \
   --out-md /tmp/manual_report.md \
   --with-eval-report \
-  --out-eval-report /tmp/manual_eval_report.md
-cat /tmp/manual_eval_report.md
+  --out-eval-report /tmp/manual_evaluation-metric.md
+cat /tmp/manual_evaluation-metric.md
 ```
 
-Expected: all three files are written; `manual_eval_report.md` has `## Pipeline Stats` and `## GEval Metrics` tables populated with real numbers; no errors from the GEval Ollama calls; the command prints `Wrote /tmp/manual_report.json and /tmp/manual_report.md` followed by `Wrote /tmp/manual_eval_report.md`.
+Expected: all three files are written; `manual_evaluation-metric.md` has `## Pipeline Stats` and `## GEval Metrics` tables populated with real numbers; no errors from the GEval Ollama calls; the command prints `Wrote /tmp/manual_report.json and /tmp/manual_report.md` followed by `Wrote /tmp/manual_evaluation-metric.md`.

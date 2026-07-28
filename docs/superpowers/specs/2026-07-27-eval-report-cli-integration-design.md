@@ -17,7 +17,7 @@ producing it.
 ## Scope
 
 - Add `--with-eval-report` (flag, default off) and `--out-eval-report` (path, default
-  `eval_report.md`) options to the `rank` command in `src/evidencerank/cli.py`.
+  `evaluation-metric.md`) options to the `rank` command in `src/evidencerank/cli.py`.
 - When `--with-eval-report` is set, after writing `report.json`/`report.md` as today, call
   the existing `evaluation.report.write_eval_markdown_report` on the just-written
   `report.json` path (single-run: GEval metrics + pipeline stats, no rank stability section,
@@ -47,7 +47,7 @@ CLI edge changes.
 ### `src/evidencerank/cli.py` (modify)
 
 - New `@click.option("--with-eval-report", is_flag=True, default=False)`.
-- New `@click.option("--out-eval-report", default="eval_report.md", type=click.Path())`.
+- New `@click.option("--out-eval-report", default="evaluation-metric.md", type=click.Path())`.
 - `rank()` signature gains `with_eval_report` and `out_eval_report` parameters.
 - After the existing `write_json_report` / `write_markdown_report` calls and their
   `click.echo`, add:
@@ -92,7 +92,7 @@ pipeline/report-writing):
 
 - New test: invoke `rank` with `--with-eval-report` (mocking the three GEval metrics'
   `.measure()`, same monkeypatch pattern as `evaluation/test_cli.py`), assert
-  `eval_report.md` is written and contains the expected `## Pipeline Stats` / `## GEval
+  `evaluation-metric.md` is written and contains the expected `## Pipeline Stats` / `## GEval
   Metrics` sections.
 - New test: invoke `rank` without `--with-eval-report` (default), assert no eval-report file
   is written — confirms the flag is genuinely opt-in and that plain `rank` runs are

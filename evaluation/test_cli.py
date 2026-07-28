@@ -37,7 +37,7 @@ def _write_minimal_report(path: Path) -> None:
 def test_eval_report_cli_writes_output_file(tmp_path, monkeypatch):
     report_path = tmp_path / "report.json"
     _write_minimal_report(report_path)
-    out_path = tmp_path / "eval_report.md"
+    out_path = tmp_path / "evaluation-metric.md"
 
     monkeypatch.setattr(groundedness_metric, "measure", Mock(return_value=0.9))
     monkeypatch.setattr(recruiter_alignment_metric, "measure", Mock(return_value=0.9))

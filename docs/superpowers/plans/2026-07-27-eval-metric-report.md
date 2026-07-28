@@ -406,7 +406,7 @@ def test_build_eval_markdown_report_multi_run_includes_rank_stability(tmp_path, 
 def test_write_eval_markdown_report_writes_file(tmp_path, monkeypatch):
     report_path = tmp_path / "report.json"
     _write_calibrated_report(report_path, {"alice": 1})
-    out_path = tmp_path / "eval_report.md"
+    out_path = tmp_path / "evaluation-metric.md"
 
     monkeypatch.setattr(groundedness_metric, "measure", Mock(return_value=0.9))
     monkeypatch.setattr(recruiter_alignment_metric, "measure", Mock(return_value=0.9))
@@ -558,7 +558,7 @@ def _write_minimal_report(path: Path) -> None:
 def test_eval_report_cli_writes_output_file(tmp_path, monkeypatch):
     report_path = tmp_path / "report.json"
     _write_minimal_report(report_path)
-    out_path = tmp_path / "eval_report.md"
+    out_path = tmp_path / "evaluation-metric.md"
 
     monkeypatch.setattr(groundedness_metric, "measure", Mock(return_value=0.9))
     monkeypatch.setattr(recruiter_alignment_metric, "measure", Mock(return_value=0.9))
@@ -597,7 +597,7 @@ from evaluation.report import write_eval_markdown_report
     multiple=True,
     type=click.Path(exists=True),
 )
-@click.option("--out", default="eval_report.md", type=click.Path())
+@click.option("--out", default="evaluation-metric.md", type=click.Path())
 def eval_report(report_paths, out):
     """Build an evaluation metric report from one or more report.json files.
 
