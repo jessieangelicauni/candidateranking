@@ -31,10 +31,7 @@ this repo for that purpose — then run:
 ```bash
 uv run evidencerank \
   --jd machine_learning_engineer.txt \
-  --resumes-dir resumes \
-  --out-json report.json \
-  --out-md report.md \
-  --with-eval-report
+  --resumes-dir resumes
 ```
 
 The pipeline prints a `Running stage: <name>` line to stdout as each of the 6 stages
@@ -55,7 +52,12 @@ with the reason `"ranked outside judge's top 10 by rating"`. `report.md`'s ranke
 reflects the shortlist that reached calibration.
 
 This produces `report.json` (full evidence trail, including dropped candidates and
-hallucination check results) and `report.md` (a ranked Markdown table).
+hallucination check results), `report.md` (a ranked Markdown table), and
+`eval_report.md` (the evaluation metric report — see
+[Evaluation metric report](#evaluation-metric-report) below), all written to the
+directory you run `evidencerank` from. Each run overwrites the previous one's
+`report.json`/`report.md`/`eval_report.md` — rename them (e.g. `mv report.json
+run1.json`) between runs if you need to keep more than one.
 
 Extracted candidate profiles are cached at `.cache/evidencerank/extract_profiles/`
 (relative to the directory you run `evidencerank` from), keyed by a hash of the
@@ -73,11 +75,10 @@ evidence items were removed for that candidate before calibration (see
 `report.json`'s `hallucination_reports` for the removed quotes themselves) — a
 dash (`—`) means every quote verified.
 
-Two thresholds are tunable: `--prefilter-threshold` (default `0.7`) sets the minimum
-cosine similarity between the JD's required skills and a candidate's skills to survive
-the embedding pre-filter; `--hallucination-threshold` (default `85.0`) sets the minimum
-fuzzy-match score for a quoted piece of evidence to count as verified against the
-candidate's raw CV text.
+Two thresholds are fixed (not CLI-configurable): the embedding pre-filter's minimum
+cosine similarity between the JD's required skills and a candidate's skills is `0.7`;
+the hallucination checker's minimum fuzzy-match score for a quoted piece of evidence
+to count as verified against the candidate's raw CV text is `85.0`.
 
 `--llm-concurrency` (default `4`) bounds how many candidates' `extract_profiles`
 and `judge` LLM calls run concurrently, using LangChain's `Runnable.batch()`
@@ -93,8 +94,7 @@ audit-trail artifact. It is not the same view the Judge model sees (that input i
 redacted for blind evaluation; see the design spec's Fairness section). Don't treat or
 share `report.json` as if it were already anonymized.
 
-Pass `--with-eval-report` to also generate the evaluation metric report
-(`eval_report.md` by default, override with `--out-eval-report`) in the same run — see
+Every run also generates the evaluation metric report (`eval_report.md`) — see
 [Evaluation metric report](#evaluation-metric-report) below for what it contains. This
 requires `ollama serve` running locally with the eval judge model available (same as the
 standalone `evidencerank-eval-report` command).
@@ -142,8 +142,9 @@ The three `GEval` metrics in `evaluation/metrics.py` use a local Ollama model as
 judge (`EVIDENCERANK_EVAL_MODEL`, see [Environment variables](#environment-variables)),
 same as the production pipeline — no external API key required.
 
-To measure rank stability, run the pipeline N times on the same JD/resumes with
-different `--out-json` paths, then:
+To measure rank stability, run the pipeline N times on the same JD/resumes, renaming
+`report.json` after each run (e.g. `mv report.json run1.json`) since every run
+overwrites it, then:
 
 ```python
 from evaluation.rank_stability import rank_stability
@@ -160,9 +161,9 @@ more existing `report.json` files:
 uv run evidencerank-eval-report --reports report.json --out eval_report.md
 ```
 
-If you're evaluating a single run right after producing it, `evidencerank rank
---with-eval-report` (see [Running the pipeline](#running-the-pipeline) above) does this in
-one command instead of two.
+If you're evaluating a single run right after producing it, `evidencerank rank` (see
+[Running the pipeline](#running-the-pipeline) above) already does this in the same run —
+no separate command needed.
 
 Pass `--reports` once per report path — repeat it for each additional run to also
 include rank stability across runs:
