@@ -1,3 +1,4 @@
+import asyncio
 import json
 import statistics
 from pathlib import Path
@@ -67,7 +68,21 @@ def _aggregate_scores(scores: list[float], threshold: float) -> dict:
     return {"n": n, "mean": mean, "std": std, "pass_rate": pass_rate}
 
 
-def compute_geval_scores(report_path: str | Path) -> dict[str, dict]:
+async def _measure_concurrently(
+    metric_test_case_pairs: list[tuple], max_concurrency: int
+) -> list[float]:
+    semaphore = asyncio.Semaphore(max_concurrency)
+
+    async def _measure_one(metric, test_case: LLMTestCase) -> float:
+        async with semaphore:
+            return await metric.a_measure(test_case)
+
+    return await asyncio.gather(
+        *(_measure_one(metric, test_case) for metric, test_case in metric_test_case_pairs)
+    )
+
+
+def compute_geval_scores(report_path: str | Path, max_concurrency: int = 4) -> dict[str, dict]:
     data = json.loads(Path(report_path).read_text(encoding="utf-8"))
     jd_text = _format_jd_text(data["jd"])
 
@@ -76,18 +91,26 @@ def compute_geval_scores(report_path: str | Path) -> dict[str, dict]:
         judge_text = _format_judge_result_text(judge_result)
         test_cases.append(build_test_case(jd_text, judge_text))
 
+    # Every (metric, candidate) pair is measured concurrently, capped by
+    # max_concurrency - the two metrics no longer run as two fully sequential
+    # passes over all candidates, and candidates within a metric no longer
+    # block one another either.
+    pairs = [(metric, test_case) for metric in _GEVAL_METRICS for test_case in test_cases]
+    all_scores = asyncio.run(_measure_concurrently(pairs, max_concurrency)) if pairs else []
+
     results: dict[str, dict] = {}
-    for metric in _GEVAL_METRICS:
-        scores = [metric.measure(test_case) for test_case in test_cases]
+    n = len(test_cases)
+    for i, metric in enumerate(_GEVAL_METRICS):
+        scores = all_scores[i * n : (i + 1) * n]
         results[metric.name] = _aggregate_scores(scores, metric.threshold)
     return results
 
 
-def build_eval_markdown_report(report_paths: list[str | Path]) -> str:
+def build_eval_markdown_report(report_paths: list[str | Path], max_concurrency: int = 4) -> str:
     primary = report_paths[0]
     data = json.loads(Path(primary).read_text(encoding="utf-8"))
     stats = compute_pipeline_stats(primary)
-    geval = compute_geval_scores(primary)
+    geval = compute_geval_scores(primary, max_concurrency=max_concurrency)
 
     lines = [
         "# Evaluation Metric Report",
@@ -157,5 +180,9 @@ def build_eval_markdown_report(report_paths: list[str | Path]) -> str:
     return "\n".join(lines)
 
 
-def write_eval_markdown_report(report_paths: list[str | Path], path: str | Path) -> None:
-    Path(path).write_text(build_eval_markdown_report(report_paths), encoding="utf-8")
+def write_eval_markdown_report(
+    report_paths: list[str | Path], path: str | Path, max_concurrency: int = 4
+) -> None:
+    Path(path).write_text(
+        build_eval_markdown_report(report_paths, max_concurrency=max_concurrency), encoding="utf-8"
+    )

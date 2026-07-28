@@ -1,6 +1,6 @@
 import json
 from pathlib import Path
-from unittest.mock import MagicMock, Mock
+from unittest.mock import AsyncMock, MagicMock
 
 from click.testing import CliRunner
 from fpdf import FPDF
@@ -38,8 +38,8 @@ def test_eval_report_cli_writes_output_file(tmp_path, monkeypatch):
     _write_minimal_report(report_path)
     out_path = tmp_path / "evaluation-metric.md"
 
-    monkeypatch.setattr(recruiter_alignment_metric, "measure", Mock(return_value=0.9))
-    monkeypatch.setattr(evidence_relevancy_metric, "measure", Mock(return_value=0.9))
+    monkeypatch.setattr(recruiter_alignment_metric, "a_measure", AsyncMock(return_value=0.9))
+    monkeypatch.setattr(evidence_relevancy_metric, "a_measure", AsyncMock(return_value=0.9))
 
     runner = CliRunner()
     result = runner.invoke(
@@ -49,6 +49,45 @@ def test_eval_report_cli_writes_output_file(tmp_path, monkeypatch):
     assert result.exit_code == 0, result.output
     assert out_path.exists()
     assert str(out_path) in result.output
+
+
+def test_eval_report_cli_passes_llm_concurrency_through(tmp_path, monkeypatch):
+    report_path = tmp_path / "report.json"
+    _write_minimal_report(report_path)
+    out_path = tmp_path / "evaluation-metric.md"
+
+    called = []
+    monkeypatch.setattr(
+        "evaluation.cli.write_eval_markdown_report",
+        lambda *args, **kwargs: called.append(kwargs),
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(
+        eval_report,
+        ["--reports", str(report_path), "--out", str(out_path), "--llm-concurrency", "9"],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert called[0]["max_concurrency"] == 9
+
+
+def test_eval_report_cli_defaults_llm_concurrency_to_four(tmp_path, monkeypatch):
+    report_path = tmp_path / "report.json"
+    _write_minimal_report(report_path)
+    out_path = tmp_path / "evaluation-metric.md"
+
+    called = []
+    monkeypatch.setattr(
+        "evaluation.cli.write_eval_markdown_report",
+        lambda *args, **kwargs: called.append(kwargs),
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(eval_report, ["--reports", str(report_path), "--out", str(out_path)])
+
+    assert result.exit_code == 0, result.output
+    assert called[0]["max_concurrency"] == 4
 
 
 def _make_pdf(path: Path, text: str) -> None:
@@ -172,6 +211,12 @@ def test_rank_stability_passes_llm_concurrency_through_to_each_run(monkeypatch):
     fake_graph.invoke.return_value = _fake_final_state(fake_jd)
     monkeypatch.setattr("evidencerank.cli.build_graph", lambda: fake_graph)
 
+    eval_report_calls = []
+    monkeypatch.setattr(
+        "evaluation.cli.write_eval_markdown_report",
+        lambda *args, **kwargs: eval_report_calls.append(kwargs),
+    )
+
     runner = CliRunner()
     with runner.isolated_filesystem():
         _write_jd_and_resume()
@@ -185,3 +230,7 @@ def test_rank_stability_passes_llm_concurrency_through_to_each_run(monkeypatch):
 
     for call in fake_graph.invoke.call_args_list:
         assert call[0][0]["max_concurrency"] == 8
+
+    # The same --llm-concurrency value also bounds the eval report's GEval
+    # concurrency, not just each pipeline run.
+    assert eval_report_calls[0]["max_concurrency"] == 8

@@ -14,8 +14,9 @@ from evaluation.report import write_eval_markdown_report
     multiple=True,
     type=click.Path(exists=True),
 )
+@click.option("--llm-concurrency", default=4, type=click.IntRange(min=1))
 @click.option("--out", default="evaluation-metric.md", type=click.Path())
-def eval_report(report_paths, out):
+def eval_report(report_paths, llm_concurrency, out):
     """Build an evaluation metric report from one or more report.json files.
 
     Pass --reports once per report.json path. One path gives GEval metrics +
@@ -24,7 +25,7 @@ def eval_report(report_paths, out):
 
         evidencerank-eval-report --reports a.json --reports b.json --out evaluation-metric.md
     """
-    write_eval_markdown_report(list(report_paths), out)
+    write_eval_markdown_report(list(report_paths), out, max_concurrency=llm_concurrency)
     click.echo(f"Wrote {out}")
 
 
@@ -51,7 +52,7 @@ def rank_stability(jd_path, resumes_dir, runs, llm_concurrency, out):
         report_paths.append(path)
         click.echo(f"Wrote {path}")
 
-    write_eval_markdown_report(report_paths, out)
+    write_eval_markdown_report(report_paths, out, max_concurrency=llm_concurrency)
     click.echo(f"Wrote {out}")
 
 

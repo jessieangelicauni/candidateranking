@@ -98,10 +98,10 @@ def test_rank_command_passes_llm_concurrency_through_to_graph_state(monkeypatch)
     fake_graph.invoke.return_value = _fake_final_state(fake_jd)
     monkeypatch.setattr("evidencerank.cli.build_graph", lambda: fake_graph)
 
-    called = []
+    eval_report_calls = []
     monkeypatch.setattr(
         "evaluation.report.write_eval_markdown_report",
-        lambda *args, **kwargs: called.append(args),
+        lambda *args, **kwargs: eval_report_calls.append((args, kwargs)),
     )
 
     runner = CliRunner()
@@ -119,6 +119,11 @@ def test_rank_command_passes_llm_concurrency_through_to_graph_state(monkeypatch)
 
     invoked_state = fake_graph.invoke.call_args[0][0]
     assert invoked_state["max_concurrency"] == 8
+
+    # The same --llm-concurrency value also bounds the eval report's GEval
+    # concurrency, not just the production judge/extractor calls.
+    _, eval_report_kwargs = eval_report_calls[0]
+    assert eval_report_kwargs["max_concurrency"] == 8
 
 
 def test_rank_command_defaults_llm_concurrency_to_four(monkeypatch):
