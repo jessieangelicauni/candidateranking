@@ -15,15 +15,15 @@ from evidencerank.models import (
 def _patch_pipeline_fakes(
     monkeypatch,
     *,
-    extract_cv,
-    prefilter_candidate,
-    judge_candidate,
+    extract_cvs,
+    prefilter_candidates,
+    judge_candidates,
     calibrate_pool,
     check_evidence,
 ):
-    monkeypatch.setattr("evidencerank.graph.cached_extract_cv", extract_cv)
-    monkeypatch.setattr("evidencerank.graph.prefilter_candidate", prefilter_candidate)
-    monkeypatch.setattr("evidencerank.graph.judge_candidate", judge_candidate)
+    monkeypatch.setattr("evidencerank.graph.cached_extract_cvs", extract_cvs)
+    monkeypatch.setattr("evidencerank.graph.prefilter_candidates", prefilter_candidates)
+    monkeypatch.setattr("evidencerank.graph.judge_candidates", judge_candidates)
     monkeypatch.setattr("evidencerank.graph.calibrate_pool", calibrate_pool)
     monkeypatch.setattr("evidencerank.graph.check_evidence", check_evidence)
 
@@ -43,28 +43,40 @@ def test_graph_runs_extract_prefilter_judge_hallucination_calibrate(monkeypatch)
         "strong_b": "Python resume text - candidate B unique marker BBB",
     }
 
-    def fake_extract_cv(candidate_id, raw_text):
-        return CandidateProfile(
-            candidate_id=candidate_id,
-            raw_cv_text=raw_text,
-            contact=ContactInfo(name=candidate_id),
-            skills=["Python"] if candidate_id != "weak" else ["Photoshop"],
-        )
+    def fake_extract_cvs(candidates, max_concurrency):
+        return {
+            candidate_id: CandidateProfile(
+                candidate_id=candidate_id,
+                raw_cv_text=raw_text,
+                contact=ContactInfo(name=candidate_id),
+                skills=["Python"] if candidate_id != "weak" else ["Photoshop"],
+            )
+            for candidate_id, raw_text in candidates.items()
+        }
 
-    def fake_prefilter_candidate(candidate_id, jd_required_skills, candidate_skills, threshold):
-        passed = candidate_id != "weak"
-        return PrefilterResult(candidate_id=candidate_id, similarity=0.9 if passed else 0.1, passed=passed)
+    def fake_prefilter_candidates(jd_required_skills, candidate_skills, threshold):
+        return {
+            candidate_id: PrefilterResult(
+                candidate_id=candidate_id,
+                similarity=0.9 if candidate_id != "weak" else 0.1,
+                passed=candidate_id != "weak",
+            )
+            for candidate_id in candidate_skills
+        }
 
-    def fake_judge_candidate(jd_requirements, profile):
-        return JudgeResult(
-            candidate_id=profile.candidate_id,
-            tier=Tier.STRONG_FIT,
-            rating=9,
-            evidence=[
-                EvidenceClaim(claim="Strong fit", quote="Python"),
-                EvidenceClaim(claim="Fabricated claim", quote="FABRICATED unverifiable quote text"),
-            ],
-        )
+    def fake_judge_candidates(jd_requirements, profiles, max_concurrency):
+        return {
+            profile.candidate_id: JudgeResult(
+                candidate_id=profile.candidate_id,
+                tier=Tier.STRONG_FIT,
+                rating=9,
+                evidence=[
+                    EvidenceClaim(claim="Strong fit", quote="Python"),
+                    EvidenceClaim(claim="Fabricated claim", quote="FABRICATED unverifiable quote text"),
+                ],
+            )
+            for profile in profiles
+        }
 
     # Records every call to calibrate_pool so we can assert it is invoked
     # exactly once over the full surviving pool, not once per candidate.
@@ -96,9 +108,9 @@ def test_graph_runs_extract_prefilter_judge_hallucination_calibrate(monkeypatch)
 
     _patch_pipeline_fakes(
         monkeypatch,
-        extract_cv=fake_extract_cv,
-        prefilter_candidate=fake_prefilter_candidate,
-        judge_candidate=fake_judge_candidate,
+        extract_cvs=fake_extract_cvs,
+        prefilter_candidates=fake_prefilter_candidates,
+        judge_candidates=fake_judge_candidates,
         calibrate_pool=fake_calibrate_pool,
         check_evidence=fake_check_evidence,
     )
@@ -162,32 +174,41 @@ def test_graph_shortlists_top_10_by_rating_before_calibrating(monkeypatch):
     jd = JDRequirements(title="ML Engineer", required_skills=["Python"])
     raw_resumes = {f"c{i}": f"Python resume {i}" for i in range(12)}
 
-    def fake_extract_cv(candidate_id, raw_text):
-        return CandidateProfile(
-            candidate_id=candidate_id,
-            raw_cv_text=raw_text,
-            contact=ContactInfo(name=candidate_id),
-            skills=["Python"],
-        )
+    def fake_extract_cvs(candidates, max_concurrency):
+        return {
+            candidate_id: CandidateProfile(
+                candidate_id=candidate_id,
+                raw_cv_text=raw_text,
+                contact=ContactInfo(name=candidate_id),
+                skills=["Python"],
+            )
+            for candidate_id, raw_text in candidates.items()
+        }
 
-    def fake_prefilter_candidate(candidate_id, jd_required_skills, candidate_skills, threshold):
-        return PrefilterResult(candidate_id=candidate_id, similarity=0.9, passed=True)
+    def fake_prefilter_candidates(jd_required_skills, candidate_skills, threshold):
+        return {
+            candidate_id: PrefilterResult(candidate_id=candidate_id, similarity=0.9, passed=True)
+            for candidate_id in candidate_skills
+        }
 
     # 12 candidates, ratings capped to the valid 1-10 range (JudgeResult.rating
     # is Field(ge=1, le=10)): c0-c7 at 10, c8-c9 at 9, c10-c11 at 3. The
     # cutoff for the top 10 lands cleanly between the rating-9 and rating-3
     # groups, so the top 10 by rating is exactly c0..c9 with no boundary tie
     # to resolve here (tie-at-the-boundary behavior is already covered in
-    # isolation by tests/agents/test_shortlist.py from Task 1).
-    def fake_judge_candidate(jd_requirements, profile):
-        index = int(profile.candidate_id[1:])
+    # isolation by tests/agents/test_shortlist.py).
+    def fake_judge_candidates(jd_requirements, profiles, max_concurrency):
         ratings = [10] * 8 + [9] * 2 + [3] * 2
-        return JudgeResult(
-            candidate_id=profile.candidate_id,
-            tier=Tier.STRONG_FIT,
-            rating=ratings[index],
-            evidence=[EvidenceClaim(claim="Strong fit", quote="Python")],
-        )
+        results = {}
+        for profile in profiles:
+            index = int(profile.candidate_id[1:])
+            results[profile.candidate_id] = JudgeResult(
+                candidate_id=profile.candidate_id,
+                tier=Tier.STRONG_FIT,
+                rating=ratings[index],
+                evidence=[EvidenceClaim(claim="Strong fit", quote="Python")],
+            )
+        return results
 
     calibrate_calls: list[list[str]] = []
 
@@ -206,9 +227,9 @@ def test_graph_shortlists_top_10_by_rating_before_calibrating(monkeypatch):
 
     _patch_pipeline_fakes(
         monkeypatch,
-        extract_cv=fake_extract_cv,
-        prefilter_candidate=fake_prefilter_candidate,
-        judge_candidate=fake_judge_candidate,
+        extract_cvs=fake_extract_cvs,
+        prefilter_candidates=fake_prefilter_candidates,
+        judge_candidates=fake_judge_candidates,
         calibrate_pool=fake_calibrate_pool,
         check_evidence=fake_check_evidence,
     )

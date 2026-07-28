@@ -5,14 +5,14 @@ import click
 from langgraph.graph import END, StateGraph
 
 from evidencerank.agents.calibrator import calibrate_pool
-from evidencerank.agents.cv_extractor import cached_extract_cv
+from evidencerank.agents.cv_extractor import cached_extract_cvs
 from evidencerank.agents.hallucination_checker import (
     DEFAULT_THRESHOLD,
     check_evidence,
     filter_verified_evidence,
 )
-from evidencerank.agents.judge import judge_candidate
-from evidencerank.agents.prefilter import prefilter_candidate
+from evidencerank.agents.judge import judge_candidates
+from evidencerank.agents.prefilter import prefilter_candidates
 from evidencerank.agents.shortlist import select_shortlist
 from evidencerank.models import (
     CalibratedResult,
@@ -38,45 +38,40 @@ class PipelineState(TypedDict, total=False):
     stage_timings: dict[str, float]
     prefilter_threshold: float
     hallucination_threshold: float
+    max_concurrency: int
 
 
 def extract_profiles_node(state: PipelineState) -> dict:
     click.echo("Running stage: extract_profiles")
-    profiles = {
-        candidate_id: cached_extract_cv(candidate_id, raw_text)
-        for candidate_id, raw_text in state["raw_resumes"].items()
-    }
+    max_concurrency = state.get("max_concurrency", 4)
+    profiles = cached_extract_cvs(state["raw_resumes"], max_concurrency=max_concurrency)
     return {"profiles": profiles}
 
 
 def prefilter_node(state: PipelineState) -> dict:
     click.echo("Running stage: prefilter")
     threshold = state.get("prefilter_threshold", 0.5)
-    results: dict[str, PrefilterResult] = {}
-    dropped: list[dict[str, str]] = []
-    for candidate_id, profile in state["profiles"].items():
-        result = prefilter_candidate(
-            candidate_id,
-            state["jd"].required_skills,
-            profile.skills,
-            threshold=threshold,
-        )
-        results[candidate_id] = result
-        if not result.passed:
-            dropped.append(
-                {"candidate_id": candidate_id, "reason": "pre-filter: no relevant skill overlap"}
-            )
+    candidate_skills = {
+        candidate_id: profile.skills for candidate_id, profile in state["profiles"].items()
+    }
+    results = prefilter_candidates(state["jd"].required_skills, candidate_skills, threshold=threshold)
+    dropped: list[dict[str, str]] = [
+        {"candidate_id": candidate_id, "reason": "pre-filter: no relevant skill overlap"}
+        for candidate_id, result in results.items()
+        if not result.passed
+    ]
     return {"prefilter_results": results, "dropped": dropped}
 
 
 def judge_node(state: PipelineState) -> dict:
     click.echo("Running stage: judge")
-    judge_results: dict[str, JudgeResult] = {}
-    for candidate_id, result in state["prefilter_results"].items():
-        if not result.passed:
-            continue
-        profile = state["profiles"][candidate_id]
-        judge_results[candidate_id] = judge_candidate(state["jd"], profile)
+    max_concurrency = state.get("max_concurrency", 4)
+    passing_profiles = [
+        state["profiles"][candidate_id]
+        for candidate_id, result in state["prefilter_results"].items()
+        if result.passed
+    ]
+    judge_results = judge_candidates(state["jd"], passing_profiles, max_concurrency=max_concurrency)
     return {"judge_results": judge_results}
 
 
