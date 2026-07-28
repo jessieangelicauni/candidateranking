@@ -14,6 +14,20 @@ def test_groundedness_metric_uses_context_param():
     assert LLMTestCaseParams.ACTUAL_OUTPUT in groundedness_metric.evaluation_params
 
 
+def test_groundedness_metric_scopes_verbatim_check_to_quote_not_claim():
+    # A claim is the recruiter's own interpretive synthesis of a quote (e.g. "lacks
+    # direct machine learning experience"), not itself a verbatim excerpt. An earlier
+    # version of this metric used an implicit `criteria=` string that had the eval
+    # judge penalize claims for not having their own separate verbatim match in
+    # context, scoring well-reasoned recruiter inferences as "ungrounded" even when
+    # every quote was genuinely sourced from the resume. Explicit evaluation_steps
+    # (matching the other two metrics) scope the verbatim check to the quote alone.
+    steps_text = " ".join(groundedness_metric.evaluation_steps)
+    assert "check ONLY the quoted text" in steps_text
+    assert "Ignore whether the claim's own wording appears in context" in steps_text
+    assert "Do not lower the score because a claim draws a conclusion" in steps_text
+
+
 def test_recruiter_alignment_metric_uses_input_and_output_params():
     assert LLMTestCaseParams.INPUT in recruiter_alignment_metric.evaluation_params
     assert LLMTestCaseParams.ACTUAL_OUTPUT in recruiter_alignment_metric.evaluation_params

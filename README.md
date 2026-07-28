@@ -18,6 +18,7 @@ the original design doc.
    ```bash
    ollama pull qwen2.5:7b-instruct
    ollama pull qwen2.5:14b-instruct
+   ollama pull qwen3:14b  # GEval judge for the evaluation harness (evaluation-metric.md)
    ```
 3. Install project dependencies: `uv sync`
 4. Set required environment variables (see [Environment variables](#environment-variables) below)
@@ -140,7 +141,7 @@ commit real tokens.
 | Variable | Required for | Notes |
 | --- | --- | --- |
 | `HF_TOKEN` | Downloading the `BAAI/bge-small-en-v1.5` embedding model used by the pre-filter stage | Only needed if you hit Hugging Face Hub rate limits/auth requirements on first download; the model is cached locally afterward. Get a token at https://huggingface.co/settings/tokens. |
-| `EVIDENCERANK_EVAL_MODEL` | `evaluation/metrics.py` GEval metrics | Optional. Ollama model used as the GEval judge; defaults to `qwen2.5:14b-instruct` (same model already pulled for the production judge stage). Requires `ollama serve` running locally, same as the production pipeline. |
+| `EVIDENCERANK_EVAL_MODEL` | `evaluation/metrics.py` GEval metrics | Optional. Ollama model used as the GEval judge; defaults to `qwen3:14b` (`ollama pull qwen3:14b`). Requires `ollama serve` running locally, same as the production pipeline. |
 
 ## Research evaluation harness
 
@@ -155,8 +156,14 @@ The `evaluation/` package is separate from the production pipeline (`src/evidenc
   evaluation report, suitable for a paper appendix.
 
 The three `GEval` metrics in `evaluation/metrics.py` use a local Ollama model as the
-judge (`EVIDENCERANK_EVAL_MODEL`, see [Environment variables](#environment-variables)),
-same as the production pipeline — no external API key required.
+judge (`EVIDENCERANK_EVAL_MODEL`, see [Environment variables](#environment-variables)) —
+no external API key required, same as the production pipeline, though a different model
+by default (`qwen3:14b`, a reasoning model, rather than the production judge's
+`qwen2.5:14b-instruct`). A non-reasoning model of the same size was measurably less
+reliable as an evaluator: it sometimes misjudged its own side-by-side text comparison
+(e.g. claiming a quote didn't match the resume when it was in fact an exact match),
+dragging down all three GEval scores with the eval judge's own errors rather than real
+production-pipeline defects.
 
 To measure rank stability, run the pipeline N times on the same JD/resumes, renaming
 `report.json` after each run (e.g. `mv report.json run1.json`) since every run
