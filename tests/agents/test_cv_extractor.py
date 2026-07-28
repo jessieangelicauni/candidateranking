@@ -12,6 +12,17 @@ def test_cv_extractor_prompt_covers_nonstandard_work_history_headings():
     assert "Internships / Experience" in CV_EXTRACTOR_PROMPT
 
 
+def test_cv_extractor_prompt_forbids_normalizing_degree_abbreviations():
+    # Observed on a real resume: the extractor turned "M.Sc." into "Master's
+    # Degree" in the education.degree field. That paraphrase then diverges
+    # from the resume's actual wording, so a Judge quote sourced from this
+    # field (even if the Judge is told not to do that) fails hallucination
+    # verification against raw_cv_text even though the underlying fact -
+    # the candidate has that degree - is genuine.
+    assert '"M.Sc." must stay "M.Sc.", not become "Master\'s Degree"' in CV_EXTRACTOR_PROMPT
+    assert "copy it in the same order and punctuation the resume uses" in CV_EXTRACTOR_PROMPT
+
+
 def test_extract_cv_assembles_candidate_profile(monkeypatch):
     extracted = ExtractedProfileFields(
         contact=ContactInfo(name="Jane Doe", email="jane@example.com"),

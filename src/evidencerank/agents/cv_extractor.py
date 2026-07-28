@@ -14,6 +14,13 @@ A resume's work history is not always under a heading literally called "Work His
 history regardless of its heading wording (e.g. "Employment History", "Career History", or a \
 combined heading like "Internships / Experience"), and extract every entry in it.
 
+When extracting a degree name for the education field, preserve the resume's exact wording and \
+abbreviations verbatim - never expand or normalize an abbreviation into a different phrasing \
+(e.g. "M.Sc." must stay "M.Sc.", not become "Master's Degree"; "B.Sc." must stay "B.Sc.", not \
+become "Bachelor's Degree"). If a degree's field of study or focus appears on a separate line or \
+in parentheses near the degree line, copy it in the same order and punctuation the resume uses - \
+do not rewrite it into a new sentence of your own.
+
 Resume:
 {cv_text}
 """
