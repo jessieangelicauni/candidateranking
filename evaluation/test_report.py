@@ -59,7 +59,19 @@ def test_compute_pipeline_stats_counts_candidates(tmp_path):
         "dropped_prefilter": 1,
         "evaluated_by_judge": 2,
         "hallucination_flagged": 1,
+        "hallucination_rate": 0.5,
     }
+
+
+def test_compute_pipeline_stats_hallucination_rate_is_zero_when_no_one_judged(tmp_path):
+    # Guards against a ZeroDivisionError when every candidate is dropped at
+    # pre-filter and no one reaches the Judge.
+    report_path = tmp_path / "report.json"
+    _write_report(report_path, profiles={}, judge_results={}, hallucination_reports={})
+
+    stats = compute_pipeline_stats(report_path)
+
+    assert stats["hallucination_rate"] == 0.0
 
 
 def _write_geval_report(path: Path, judge_results: dict, profiles: dict | None = None) -> None:
