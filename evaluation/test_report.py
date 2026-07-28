@@ -1,7 +1,8 @@
-import asyncio
 import json
+import threading
+import time
 from pathlib import Path
-from unittest.mock import AsyncMock
+from unittest.mock import Mock
 
 from evaluation.metrics import evidence_relevancy_metric, recruiter_alignment_metric
 from evaluation.report import compute_geval_scores, compute_pipeline_stats
@@ -89,9 +90,9 @@ def test_compute_geval_scores_aggregates_two_candidates(tmp_path, monkeypatch):
         },
     )
 
-    recruiter_alignment_mock = AsyncMock(side_effect=[0.8, 0.4])
-    monkeypatch.setattr(recruiter_alignment_metric, "a_measure", recruiter_alignment_mock)
-    monkeypatch.setattr(evidence_relevancy_metric, "a_measure", AsyncMock(side_effect=[1.0, 0.6]))
+    recruiter_alignment_mock = Mock(side_effect=[0.8, 0.4])
+    monkeypatch.setattr(recruiter_alignment_metric, "measure", recruiter_alignment_mock)
+    monkeypatch.setattr(evidence_relevancy_metric, "measure", Mock(side_effect=[1.0, 0.6]))
 
     scores = compute_geval_scores(report_path)
 
@@ -119,9 +120,9 @@ def test_compute_geval_scores_empty_judge_results_returns_none_fields(tmp_path, 
     report_path = tmp_path / "report.json"
     _write_geval_report(report_path, judge_results={})
 
-    mock = AsyncMock()
-    monkeypatch.setattr(recruiter_alignment_metric, "a_measure", mock)
-    monkeypatch.setattr(evidence_relevancy_metric, "a_measure", mock)
+    mock = Mock()
+    monkeypatch.setattr(recruiter_alignment_metric, "measure", mock)
+    monkeypatch.setattr(evidence_relevancy_metric, "measure", mock)
 
     scores = compute_geval_scores(report_path)
 
@@ -131,10 +132,10 @@ def test_compute_geval_scores_empty_judge_results_returns_none_fields(tmp_path, 
 
 def test_compute_geval_scores_runs_concurrently_bounded_by_max_concurrency(tmp_path, monkeypatch):
     # Guards against a regression back to the old fully-sequential loop: this
-    # tracks how many a_measure() calls are simultaneously in flight (across
-    # BOTH metrics, since they share one concurrency budget) and asserts it
-    # actually exceeds 1 (proving overlap happens) while never exceeding the
-    # configured max_concurrency (proving it's bounded, not unbounded).
+    # tracks how many measure() calls are simultaneously in flight in real OS
+    # threads (across BOTH metrics, since they share one thread-pool budget)
+    # and asserts it actually exceeds 1 (proving overlap happens) while never
+    # exceeding the configured max_concurrency (proving it's bounded).
     report_path = tmp_path / "report.json"
     _write_geval_report(
         report_path,
@@ -143,19 +144,22 @@ def test_compute_geval_scores_runs_concurrently_bounded_by_max_concurrency(tmp_p
         },
     )
 
+    lock = threading.Lock()
     in_flight = 0
     max_in_flight = 0
 
-    async def fake_measure(test_case):
+    def fake_measure(test_case):
         nonlocal in_flight, max_in_flight
-        in_flight += 1
-        max_in_flight = max(max_in_flight, in_flight)
-        await asyncio.sleep(0.01)
-        in_flight -= 1
+        with lock:
+            in_flight += 1
+            max_in_flight = max(max_in_flight, in_flight)
+        time.sleep(0.05)
+        with lock:
+            in_flight -= 1
         return 0.9
 
-    monkeypatch.setattr(recruiter_alignment_metric, "a_measure", fake_measure)
-    monkeypatch.setattr(evidence_relevancy_metric, "a_measure", fake_measure)
+    monkeypatch.setattr(recruiter_alignment_metric, "measure", fake_measure)
+    monkeypatch.setattr(evidence_relevancy_metric, "measure", fake_measure)
 
     compute_geval_scores(report_path, max_concurrency=3)
 
@@ -169,8 +173,8 @@ def test_compute_geval_scores_single_candidate_std_is_none(tmp_path, monkeypatch
         judge_results={"alice": {"tier": "Weak Fit", "rating": 4, "evidence": []}},
     )
 
-    monkeypatch.setattr(recruiter_alignment_metric, "a_measure", AsyncMock(return_value=0.6))
-    monkeypatch.setattr(evidence_relevancy_metric, "a_measure", AsyncMock(return_value=0.6))
+    monkeypatch.setattr(recruiter_alignment_metric, "measure", Mock(return_value=0.6))
+    monkeypatch.setattr(evidence_relevancy_metric, "measure", Mock(return_value=0.6))
 
     scores = compute_geval_scores(report_path)
 
@@ -208,8 +212,8 @@ def test_build_eval_markdown_report_single_run_omits_rank_stability(tmp_path, mo
     report_path = tmp_path / "report.json"
     _write_calibrated_report(report_path, {"alice": 1, "bob": 2})
 
-    monkeypatch.setattr(recruiter_alignment_metric, "a_measure", AsyncMock(return_value=0.9))
-    monkeypatch.setattr(evidence_relevancy_metric, "a_measure", AsyncMock(return_value=0.9))
+    monkeypatch.setattr(recruiter_alignment_metric, "measure", Mock(return_value=0.9))
+    monkeypatch.setattr(evidence_relevancy_metric, "measure", Mock(return_value=0.9))
 
     markdown = build_eval_markdown_report([report_path])
 
@@ -226,8 +230,8 @@ def test_build_eval_markdown_report_multi_run_includes_rank_stability(tmp_path, 
     _write_calibrated_report(report_a, {"alice": 1, "bob": 2})
     _write_calibrated_report(report_b, {"alice": 1, "bob": 2})
 
-    monkeypatch.setattr(recruiter_alignment_metric, "a_measure", AsyncMock(return_value=0.9))
-    monkeypatch.setattr(evidence_relevancy_metric, "a_measure", AsyncMock(return_value=0.9))
+    monkeypatch.setattr(recruiter_alignment_metric, "measure", Mock(return_value=0.9))
+    monkeypatch.setattr(evidence_relevancy_metric, "measure", Mock(return_value=0.9))
 
     markdown = build_eval_markdown_report([report_a, report_b])
 
@@ -241,8 +245,8 @@ def test_build_eval_markdown_report_includes_geval_signal_caveat(tmp_path, monke
     report_path = tmp_path / "report.json"
     _write_calibrated_report(report_path, {"alice": 1})
 
-    monkeypatch.setattr(recruiter_alignment_metric, "a_measure", AsyncMock(return_value=0.9))
-    monkeypatch.setattr(evidence_relevancy_metric, "a_measure", AsyncMock(return_value=0.9))
+    monkeypatch.setattr(recruiter_alignment_metric, "measure", Mock(return_value=0.9))
+    monkeypatch.setattr(evidence_relevancy_metric, "measure", Mock(return_value=0.9))
 
     markdown = build_eval_markdown_report([report_path])
 
@@ -257,8 +261,8 @@ def test_write_eval_markdown_report_writes_file(tmp_path, monkeypatch):
     _write_calibrated_report(report_path, {"alice": 1})
     out_path = tmp_path / "evaluation-metric.md"
 
-    monkeypatch.setattr(recruiter_alignment_metric, "a_measure", AsyncMock(return_value=0.9))
-    monkeypatch.setattr(evidence_relevancy_metric, "a_measure", AsyncMock(return_value=0.9))
+    monkeypatch.setattr(recruiter_alignment_metric, "measure", Mock(return_value=0.9))
+    monkeypatch.setattr(evidence_relevancy_metric, "measure", Mock(return_value=0.9))
 
     write_eval_markdown_report([report_path], out_path)
 
@@ -275,8 +279,8 @@ def test_build_eval_markdown_report_includes_stage_timings_when_present(tmp_path
     data["stage_timings"] = {"extract_profiles": 1.5, "judge": 3.25}
     report_path.write_text(json.dumps(data), encoding="utf-8")
 
-    monkeypatch.setattr(recruiter_alignment_metric, "a_measure", AsyncMock(return_value=0.9))
-    monkeypatch.setattr(evidence_relevancy_metric, "a_measure", AsyncMock(return_value=0.9))
+    monkeypatch.setattr(recruiter_alignment_metric, "measure", Mock(return_value=0.9))
+    monkeypatch.setattr(evidence_relevancy_metric, "measure", Mock(return_value=0.9))
 
     markdown = build_eval_markdown_report([report_path])
 
@@ -294,8 +298,8 @@ def test_build_eval_markdown_report_omits_stage_timings_when_absent(tmp_path, mo
     # report.json written before this key existed, to guard against a
     # KeyError regression.
 
-    monkeypatch.setattr(recruiter_alignment_metric, "a_measure", AsyncMock(return_value=0.9))
-    monkeypatch.setattr(evidence_relevancy_metric, "a_measure", AsyncMock(return_value=0.9))
+    monkeypatch.setattr(recruiter_alignment_metric, "measure", Mock(return_value=0.9))
+    monkeypatch.setattr(evidence_relevancy_metric, "measure", Mock(return_value=0.9))
 
     markdown = build_eval_markdown_report([report_path])
 

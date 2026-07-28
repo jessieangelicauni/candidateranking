@@ -1,6 +1,6 @@
-import asyncio
 import json
 import statistics
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from deepeval.test_case import LLMTestCase
@@ -68,18 +68,9 @@ def _aggregate_scores(scores: list[float], threshold: float) -> dict:
     return {"n": n, "mean": mean, "std": std, "pass_rate": pass_rate}
 
 
-async def _measure_concurrently(
-    metric_test_case_pairs: list[tuple], max_concurrency: int
-) -> list[float]:
-    semaphore = asyncio.Semaphore(max_concurrency)
-
-    async def _measure_one(metric, test_case: LLMTestCase) -> float:
-        async with semaphore:
-            return await metric.a_measure(test_case)
-
-    return await asyncio.gather(
-        *(_measure_one(metric, test_case) for metric, test_case in metric_test_case_pairs)
-    )
+def _measure_pair(pair: tuple) -> float:
+    metric, test_case = pair
+    return metric.measure(test_case)
 
 
 def compute_geval_scores(report_path: str | Path, max_concurrency: int = 4) -> dict[str, dict]:
@@ -94,9 +85,15 @@ def compute_geval_scores(report_path: str | Path, max_concurrency: int = 4) -> d
     # Every (metric, candidate) pair is measured concurrently, capped by
     # max_concurrency - the two metrics no longer run as two fully sequential
     # passes over all candidates, and candidates within a metric no longer
-    # block one another either.
+    # block one another either. Thread-pool based, matching how the
+    # production pipeline's judge/extractor stages already batch LLM calls
+    # via LangChain's Runnable.batch(config={"max_concurrency": ...}).
     pairs = [(metric, test_case) for metric in _GEVAL_METRICS for test_case in test_cases]
-    all_scores = asyncio.run(_measure_concurrently(pairs, max_concurrency)) if pairs else []
+    if pairs:
+        with ThreadPoolExecutor(max_workers=max_concurrency) as executor:
+            all_scores = list(executor.map(_measure_pair, pairs))
+    else:
+        all_scores = []
 
     results: dict[str, dict] = {}
     n = len(test_cases)

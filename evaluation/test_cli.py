@@ -1,6 +1,6 @@
 import json
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import MagicMock, Mock
 
 from click.testing import CliRunner
 from fpdf import FPDF
@@ -38,8 +38,8 @@ def test_eval_report_cli_writes_output_file(tmp_path, monkeypatch):
     _write_minimal_report(report_path)
     out_path = tmp_path / "evaluation-metric.md"
 
-    monkeypatch.setattr(recruiter_alignment_metric, "a_measure", AsyncMock(return_value=0.9))
-    monkeypatch.setattr(evidence_relevancy_metric, "a_measure", AsyncMock(return_value=0.9))
+    monkeypatch.setattr(recruiter_alignment_metric, "measure", Mock(return_value=0.9))
+    monkeypatch.setattr(evidence_relevancy_metric, "measure", Mock(return_value=0.9))
 
     runner = CliRunner()
     result = runner.invoke(
