@@ -8,11 +8,7 @@ from fpdf import FPDF
 from evidencerank.models import CalibratedResult, JDRequirements, Tier
 
 from evaluation.cli import eval_report, rank_stability
-from evaluation.metrics import (
-    evidence_relevancy_metric,
-    groundedness_metric,
-    recruiter_alignment_metric,
-)
+from evaluation.metrics import evidence_relevancy_metric, recruiter_alignment_metric
 
 
 def _write_minimal_report(path: Path) -> None:
@@ -42,7 +38,6 @@ def test_eval_report_cli_writes_output_file(tmp_path, monkeypatch):
     _write_minimal_report(report_path)
     out_path = tmp_path / "evaluation-metric.md"
 
-    monkeypatch.setattr(groundedness_metric, "measure", Mock(return_value=0.9))
     monkeypatch.setattr(recruiter_alignment_metric, "measure", Mock(return_value=0.9))
     monkeypatch.setattr(evidence_relevancy_metric, "measure", Mock(return_value=0.9))
 

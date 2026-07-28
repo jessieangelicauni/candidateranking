@@ -7,7 +7,6 @@ from deepeval.test_case import LLMTestCase
 from evaluation.metrics import (
     build_test_case,
     evidence_relevancy_metric,
-    groundedness_metric,
     recruiter_alignment_metric,
 )
 from evaluation.rank_stability import rank_stability
@@ -35,7 +34,7 @@ def compute_pipeline_stats(report_path: str | Path) -> dict:
     }
 
 
-_GEVAL_METRICS = [groundedness_metric, recruiter_alignment_metric, evidence_relevancy_metric]
+_GEVAL_METRICS = [recruiter_alignment_metric, evidence_relevancy_metric]
 
 
 def _format_jd_text(jd: dict) -> str:
@@ -73,10 +72,9 @@ def compute_geval_scores(report_path: str | Path) -> dict[str, dict]:
     jd_text = _format_jd_text(data["jd"])
 
     test_cases: list[LLMTestCase] = []
-    for candidate_id, judge_result in data["judge_results"].items():
-        cv_text = data["profiles"][candidate_id]["raw_cv_text"]
+    for judge_result in data["judge_results"].values():
         judge_text = _format_judge_result_text(judge_result)
-        test_cases.append(build_test_case(jd_text, judge_text, cv_text))
+        test_cases.append(build_test_case(jd_text, judge_text))
 
     results: dict[str, dict] = {}
     for metric in _GEVAL_METRICS:
@@ -117,7 +115,7 @@ def build_eval_markdown_report(report_paths: list[str | Path]) -> str:
         "| Metric | n | Mean | Std Dev | Pass Rate |",
         "|---|---|---|---|---|",
     ]
-    for name in ("Groundedness", "RecruiterAlignment", "EvidenceRelevancy"):
+    for name in ("RecruiterAlignment", "EvidenceRelevancy"):
         m = geval[name]
         mean_str = f"{m['mean']:.3f}" if m["mean"] is not None else "N/A"
         std_str = f"{m['std']:.3f}" if m["std"] is not None else "N/A"
@@ -125,10 +123,11 @@ def build_eval_markdown_report(report_paths: list[str | Path]) -> str:
         lines.append(f"| {name} | {m['n']} | {mean_str} | {std_str} | {pass_str} |")
 
     lines.append(
-        "\n_Note: since the hallucination checker now strips unverified evidence before "
-        "calibration, Groundedness is expected to trend toward ~100% by construction "
-        "(remaining quotes already passed fuzzy verification) — RecruiterAlignment and "
-        "EvidenceRelevancy are the informative signals for judge quality._"
+        "\n_Note: quote authenticity is already measured deterministically by the "
+        "hallucination checker (see Hallucination Rate above), which strips unverified "
+        "evidence before calibration — RecruiterAlignment and EvidenceRelevancy are the "
+        "GEval signals here, since judge-quality questions like calibration and "
+        "claim-quote relevance have no deterministic equivalent._"
     )
 
     stage_timings = data.get("stage_timings") or {}

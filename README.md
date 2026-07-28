@@ -147,22 +147,25 @@ commit real tokens.
 
 The `evaluation/` package is separate from the production pipeline (`src/evidencerank/`):
 
-- `evaluation/metrics.py` — DeepEval `GEval` metrics (Groundedness, RecruiterAlignment,
-  EvidenceRelevancy) to run against pipeline output.
+- `evaluation/metrics.py` — DeepEval `GEval` metrics (RecruiterAlignment, EvidenceRelevancy)
+  to run against pipeline output. There is deliberately no GEval "Groundedness" metric —
+  quote authenticity is already measured deterministically by the production pipeline's
+  hallucination checker (see Hallucination Rate below), which is strictly more reliable
+  for that question than an LLM re-judging it (see the caveat below).
 - `evaluation/rank_stability.py` — computes Spearman/Kendall-tau rank correlation across
   repeated runs on the same input, to report LLM judgment consistency.
 - `evaluation/report.py` — aggregates the above (plus pipeline stats: candidates
-  submitted, pre-filter pass/drop, hallucination flags) into a single Markdown
+  submitted, pre-filter pass/drop, hallucination rate) into a single Markdown
   evaluation report, suitable for a paper appendix.
 
-The three `GEval` metrics in `evaluation/metrics.py` use a local Ollama model as the
+The two `GEval` metrics in `evaluation/metrics.py` use a local Ollama model as the
 judge (`EVIDENCERANK_EVAL_MODEL`, see [Environment variables](#environment-variables)) —
 no external API key required, same as the production pipeline, though a different model
 by default (`qwen3:14b`, a reasoning model, rather than the production judge's
 `qwen2.5:14b-instruct`). A non-reasoning model of the same size was measurably less
 reliable as an evaluator: it sometimes misjudged its own side-by-side text comparison
 (e.g. claiming a quote didn't match the resume when it was in fact an exact match),
-dragging down all three GEval scores with the eval judge's own errors rather than real
+dragging down GEval scores with the eval judge's own errors rather than real
 production-pipeline defects.
 
 To measure rank stability, `uv run evidencerank-rank-stability` runs the pipeline
@@ -216,8 +219,8 @@ added by the production pipeline), the report also includes a "Stage Timings"
 table showing wall-clock seconds per stage — absent for older `report.json`
 files that predate this field.
 
-Groundedness is expected to trend toward ~100% after the judge-grounding fix (2026-07-27):
-the hallucination checker now strips unverified evidence before calibration, so by
-construction the quotes remaining in a candidate's final evidence already passed fuzzy
-verification. RecruiterAlignment and EvidenceRelevancy remain the informative signals for
-judge quality.
+Quote authenticity itself isn't a GEval metric (see Research evaluation harness above) —
+it's already measured deterministically via Hallucination Rate in Pipeline Stats, since
+the hallucination checker strips unverified evidence before calibration. RecruiterAlignment
+and EvidenceRelevancy are the GEval signals for judge quality, since calibration and
+claim-quote relevance have no deterministic equivalent.
