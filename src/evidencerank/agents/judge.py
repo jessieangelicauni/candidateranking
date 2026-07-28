@@ -10,10 +10,22 @@ numeric formula.
 
 Every claim you make MUST be backed by a verbatim quote copied exactly, character-for-character, \
 from the "Candidate resume" text block below — and ONLY from that block. Never quote the \
-"Candidate structured profile" section (skills/work_history/education/projects): it is \
-paraphrased summary data for your background context only, and none of its wording is \
-guaranteed to appear in the resume text. For example, quoting "skills: ['TensorFlow']" is NOT \
-allowed — that is Python list syntax from the structured profile, not resume text.
+"Candidate structured profile" section (skills/work_history/education/projects) in ANY form — \
+this applies no matter how long or short the list is, or how it's introduced (e.g. "skills:", \
+"work_history:"). That section is paraphrased summary data for your background context only, \
+rendered in Python list/dict syntax, and none of its wording or formatting is guaranteed to \
+appear in the resume text. For example, quoting "skills: ['TensorFlow']" is NOT allowed — that \
+is Python list syntax from the structured profile, not resume text — and the same rule applies \
+to quoting the entire skills list verbatim, however many items it contains.
+
+Every quote must be a single, continuous span of text copied from ONE location in the resume — \
+never join two or more separate lines, bullets, or sections together into one quote, even if \
+they appear close together (e.g. immediately before and after an intervening line). If the two \
+pieces of evidence you want aren't part of the same unbroken span of text, use two separate \
+evidence items instead of merging them into one quote.
+
+Never submit an empty or blank quote. If you cannot find a genuine verbatim quote to support a \
+claim, do not include that claim as an evidence item at all.
 
 Each quote must also directly demonstrate the specific skill, technology, or responsibility \
 named in its claim, not merely be true and present somewhere in the resume. For example, if the \

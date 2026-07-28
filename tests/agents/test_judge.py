@@ -170,6 +170,52 @@ def test_judge_candidate_prompt_scopes_quoting_to_resume_text_only(monkeypatch):
     assert "background context only — do not quote from this section" in prompt_sent
 
 
+def test_judge_candidate_prompt_forbids_quoting_full_structured_lists(monkeypatch):
+    verdict = JudgeVerdict(
+        tier=Tier.STRONG_FIT,
+        rating=8,
+        evidence=[EvidenceClaim(claim="Has Python experience", quote="5 years of Python experience")],
+    )
+    fake_structured_model = MagicMock()
+    fake_structured_model.invoke.return_value = verdict
+    fake_chat_model = MagicMock()
+    fake_chat_model.with_structured_output.return_value = fake_structured_model
+    monkeypatch.setattr(
+        "evidencerank.agents.judge.get_chat_model",
+        lambda stage: fake_chat_model,
+    )
+    jd = JDRequirements(title="ML Engineer", required_skills=["Python"])
+
+    judge_candidate(jd, _make_profile())
+
+    prompt_sent = fake_structured_model.invoke.call_args[0][0]
+    assert "no matter how long or short the list is" in prompt_sent
+    assert "quoting the entire skills list verbatim, however many items it contains" in prompt_sent
+
+
+def test_judge_candidate_prompt_requires_contiguous_non_empty_quotes(monkeypatch):
+    verdict = JudgeVerdict(
+        tier=Tier.STRONG_FIT,
+        rating=8,
+        evidence=[EvidenceClaim(claim="Has Python experience", quote="5 years of Python experience")],
+    )
+    fake_structured_model = MagicMock()
+    fake_structured_model.invoke.return_value = verdict
+    fake_chat_model = MagicMock()
+    fake_chat_model.with_structured_output.return_value = fake_structured_model
+    monkeypatch.setattr(
+        "evidencerank.agents.judge.get_chat_model",
+        lambda stage: fake_chat_model,
+    )
+    jd = JDRequirements(title="ML Engineer", required_skills=["Python"])
+
+    judge_candidate(jd, _make_profile())
+
+    prompt_sent = fake_structured_model.invoke.call_args[0][0]
+    assert "never join two or more separate lines, bullets, or sections together" in prompt_sent
+    assert "Never submit an empty or blank quote" in prompt_sent
+
+
 def test_judge_candidate_prompt_requires_claim_relevant_quotes(monkeypatch):
     verdict = JudgeVerdict(
         tier=Tier.STRONG_FIT,
