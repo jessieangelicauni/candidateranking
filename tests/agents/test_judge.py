@@ -190,13 +190,45 @@ def test_judge_candidate_prompt_forbids_quoting_full_structured_lists(monkeypatc
 
     prompt_sent = fake_structured_model.invoke.call_args[0][0]
     assert "no matter how long or short the list is" in prompt_sent
-    assert "quoting the entire skills list verbatim, however many items it contains" in prompt_sent
+    assert "neither is quoting the skills line itself verbatim" in prompt_sent
+    assert "however many items it contains" in prompt_sent
+
+
+def test_judge_candidate_prompt_renders_skills_as_plain_line_not_python_list(monkeypatch):
+    # Observed on a real resume (cv_00019) whose extracted skills list, once
+    # comma-joined, is byte-for-byte identical to the resume's own skills
+    # line - the Judge kept quoting the structured profile's "skills: [...]"
+    # Python-list rendering as if it were a resume quote, and repeated prose
+    # warnings didn't stop it. Rendering skills as a plain comma-separated
+    # line (matching how the resume itself lists skills) removes the
+    # bracket/quote syntax the model was copy-pasting as a "quote".
+    verdict = JudgeVerdict(
+        tier=Tier.STRONG_FIT,
+        rating=8,
+        evidence=[EvidenceClaim(claim="Has Python experience", quote="5 years of Python experience")],
+    )
+    fake_structured_model = MagicMock()
+    fake_structured_model.invoke.return_value = verdict
+    fake_chat_model = MagicMock()
+    fake_chat_model.with_structured_output.return_value = fake_structured_model
+    monkeypatch.setattr(
+        "evidencerank.agents.judge.get_chat_model",
+        lambda stage: fake_chat_model,
+    )
+    jd = JDRequirements(title="ML Engineer", required_skills=["Python"])
+
+    judge_candidate(jd, _make_profile())
+
+    prompt_sent = fake_structured_model.invoke.call_args[0][0]
+    assert "skills: Python, Machine Learning" in prompt_sent
+    assert "skills: ['Python', 'Machine Learning']" not in prompt_sent
 
 
 def test_judge_candidate_prompt_forbids_quoting_paraphrased_prose_fields(monkeypatch):
-    # skills/work_history are rendered as Python list/dict syntax, an obvious
-    # tell that they aren't resume text. education.degree, by contrast, is a
-    # plain human-readable string (e.g. "Master's Degree, Computer Science")
+    # work_history/education/projects are rendered as Python list/dict
+    # syntax, an obvious tell that they aren't resume text. education.degree,
+    # by contrast, is a plain human-readable string (e.g. "Master's Degree,
+    # Computer Science")
     # that the CV-extractor may have paraphrased from the resume's actual
     # wording (e.g. "M.Sc. in Computer Science") - the prompt must warn
     # against echoing it as if it were a genuine quote too.

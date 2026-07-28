@@ -12,11 +12,15 @@ Every claim you make MUST be backed by a verbatim quote copied exactly, characte
 from the "Candidate resume" text block below — and ONLY from that block. Never quote the \
 "Candidate structured profile" section (skills/work_history/education/projects) in ANY form — \
 this applies no matter how long or short the list is, or how it's introduced (e.g. "skills:", \
-"work_history:"). That section is paraphrased summary data for your background context only, \
-rendered in Python list/dict syntax, and none of its wording or formatting is guaranteed to \
-appear in the resume text. For example, quoting "skills: ['TensorFlow']" is NOT allowed — that \
-is Python list syntax from the structured profile, not resume text — and the same rule applies \
-to quoting the entire skills list verbatim, however many items it contains.
+"work_history:"). That section is paraphrased summary data for your background context only. \
+work_history/education/projects are rendered in Python list/dict syntax; skills is a plain \
+comma-separated line — but being from the structured-profile block makes it off-limits as a \
+quote regardless of which of these formats it's in, even when its wording happens to look \
+identical to a line in the resume. For example, quoting "skills: ['TensorFlow']" (Python list \
+syntax) is NOT allowed, and neither is quoting the skills line itself verbatim (e.g. "SQL, \
+MATLAB, TensorFlow, ..."), however many items it contains — both are sourced from the structured \
+profile, not the resume text block. Find and quote the resume's own skills line (or wherever the \
+skill is actually demonstrated in the resume text) instead.
 
 This also applies to structured-profile fields that read as ordinary prose rather than a \
 list, like education.degree — that string may be the CV-extractor's own paraphrase of the \
@@ -104,7 +108,7 @@ def _build_judge_prompt(jd: JDRequirements, profile: CandidateProfile) -> str:
     return JUDGE_PROMPT.format(
         jd_requirements=jd.model_dump_json(),
         redacted_cv_text=redacted_text,
-        skills=profile.skills,
+        skills=", ".join(profile.skills),
         work_history=redacted_work_history,
         education=[entry.model_dump() for entry in profile.education],
         projects=redacted_projects,
