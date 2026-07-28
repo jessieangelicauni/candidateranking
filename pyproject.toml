@@ -21,6 +21,7 @@ dependencies = [
 [project.scripts]
 evidencerank = "evidencerank.cli:rank"
 evidencerank-eval-report = "evaluation.cli:eval_report"
+evidencerank-rank-stability = "evaluation.cli:rank_stability"
 
 [dependency-groups]
 dev = [

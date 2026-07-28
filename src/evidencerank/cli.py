@@ -17,12 +17,13 @@ PREFILTER_THRESHOLD = 0.7
 HALLUCINATION_THRESHOLD = 85.0
 
 
-@click.command()
-@click.option("--jd", "jd_path", required=True, type=click.Path(exists=True))
-@click.option("--resumes-dir", required=True, type=click.Path(exists=True, file_okay=False))
-@click.option("--llm-concurrency", default=4, type=click.IntRange(min=1))
-def rank(jd_path, resumes_dir, llm_concurrency):
-    """Rank every resume in RESUMES_DIR against the job description at JD."""
+def run_pipeline(jd_path, resumes_dir, llm_concurrency) -> dict:
+    """Run the full pipeline once and return the final graph state.
+
+    Shared by the `rank` command and `evaluation.cli.rank_stability`, which
+    calls this repeatedly on the same JD/resumes to measure rank stability
+    across runs.
+    """
     jd_text = load_text_file(jd_path)
     jd_requirements = parse_jd(jd_text)
 
@@ -32,7 +33,7 @@ def rank(jd_path, resumes_dir, llm_concurrency):
     }
 
     graph = build_graph()
-    final_state = graph.invoke(
+    return graph.invoke(
         {
             "jd": jd_requirements,
             "raw_resumes": raw_resumes,
@@ -41,6 +42,15 @@ def rank(jd_path, resumes_dir, llm_concurrency):
             "max_concurrency": llm_concurrency,
         }
     )
+
+
+@click.command()
+@click.option("--jd", "jd_path", required=True, type=click.Path(exists=True))
+@click.option("--resumes-dir", required=True, type=click.Path(exists=True, file_okay=False))
+@click.option("--llm-concurrency", default=4, type=click.IntRange(min=1))
+def rank(jd_path, resumes_dir, llm_concurrency):
+    """Rank every resume in RESUMES_DIR against the job description at JD."""
+    final_state = run_pipeline(jd_path, resumes_dir, llm_concurrency)
 
     write_json_report(final_state, OUT_JSON)
     write_markdown_report(final_state, OUT_MD)

@@ -165,9 +165,23 @@ reliable as an evaluator: it sometimes misjudged its own side-by-side text compa
 dragging down all three GEval scores with the eval judge's own errors rather than real
 production-pipeline defects.
 
-To measure rank stability, run the pipeline N times on the same JD/resumes, renaming
-`report.json` after each run (e.g. `mv report.json run1.json`) since every run
-overwrites it, then:
+To measure rank stability, `uv run evidencerank-rank-stability` runs the pipeline
+multiple times on the same JD/resumes automatically — no manual renaming needed:
+
+```bash
+uv run evidencerank-rank-stability --jd machine_learning_engineer.txt --resumes-dir resumes --runs 3
+```
+
+This runs the pipeline `--runs` times (default `3`, minimum `2`), writes each run's full
+report as `run1.json`, `run2.json`, ... (never overwritten, so every run stays available
+for inspection), and builds `evaluation-metric.md` from all of them — GEval scores and
+pipeline stats from `run1.json`, rank stability (Spearman/Kendall-tau) across all of
+them. `--llm-concurrency` and `--out` work the same as the other commands.
+
+If you'd rather drive this manually (e.g. against runs you already have, or with
+resumes/JD changing between runs), run the pipeline yourself N times, renaming
+`report.json` after each run since every run overwrites it, then either call
+`evidencerank-eval-report` (below) with all the paths, or:
 
 ```python
 from evaluation.rank_stability import rank_stability
