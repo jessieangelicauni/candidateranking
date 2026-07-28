@@ -71,10 +71,18 @@ evidence items were removed for that candidate before calibration (see
 `report.json`'s `hallucination_reports` for the removed quotes themselves) — a
 dash (`—`) means every quote verified.
 
-Two thresholds are fixed (not CLI-configurable): the embedding pre-filter's minimum
-cosine similarity between the JD's required skills and a candidate's skills is `0.7`;
-the hallucination checker's minimum fuzzy-match score for a quoted piece of evidence
-to count as verified against the candidate's raw CV text is `85.0`.
+Two thresholds are fixed (not CLI-configurable). The embedding pre-filter checks each
+JD required skill individually against a candidate's skill list — a required skill
+"exists" for that candidate if any one of their skills has cosine similarity `>= 0.7`
+to it — and the candidate passes if at least `2` of the JD's required skills exist
+for them (a fixed minimum count, not a majority — it doesn't scale with how many
+required skills the JD lists). (This is a per-skill existence count, not a single
+whole-list similarity score — a candidate whose skills are all generically
+tech-adjacent but don't individually match specific required skills like "Machine
+Learning" or "PyTorch" will fail even if a naive whole-list comparison would look
+superficially similar.) The
+hallucination checker's minimum fuzzy-match score for a quoted piece of evidence to
+count as verified against the candidate's raw CV text is `85.0`.
 
 `--llm-concurrency` (default `4`) bounds how many candidates' `extract_profiles`
 and `judge` LLM calls run concurrently, using LangChain's `Runnable.batch()`
