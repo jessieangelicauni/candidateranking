@@ -1,15 +1,6 @@
 import json
-import statistics
-from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from deepeval.test_case import LLMTestCase
-
-from evaluation.metrics import (
-    build_test_case,
-    evidence_relevancy_metric,
-    recruiter_alignment_metric,
-)
 from evaluation.rank_stability import rank_stability
 
 
@@ -35,79 +26,10 @@ def compute_pipeline_stats(report_path: str | Path) -> dict:
     }
 
 
-_GEVAL_METRICS = [recruiter_alignment_metric, evidence_relevancy_metric]
-
-
-def _format_jd_text(jd: dict) -> str:
-    return "\n".join(
-        [
-            f"Title: {jd['title']}",
-            f"Required skills: {', '.join(jd['required_skills'])}",
-            f"Nice-to-have skills: {', '.join(jd['nice_to_have_skills'])}",
-            f"Minimum experience years: {jd['min_experience_years']}",
-            f"Education: {jd['education']}",
-            f"Responsibilities: {', '.join(jd['responsibilities'])}",
-        ]
-    )
-
-
-def _format_judge_result_text(judge_result: dict) -> str:
-    lines = [f"Tier: {judge_result['tier']}", f"Rating: {judge_result['rating']}"]
-    for claim in judge_result["evidence"]:
-        lines.append(f'- {claim["claim"]}: "{claim["quote"]}"')
-    return "\n".join(lines)
-
-
-def _aggregate_scores(scores: list[float], threshold: float) -> dict:
-    n = len(scores)
-    if n == 0:
-        return {"n": 0, "mean": None, "std": None, "pass_rate": None}
-    mean = statistics.mean(scores)
-    std = statistics.stdev(scores) if n >= 2 else None
-    pass_rate = sum(1 for score in scores if score >= threshold) / n
-    return {"n": n, "mean": mean, "std": std, "pass_rate": pass_rate}
-
-
-def _measure_pair(pair: tuple) -> float:
-    metric, test_case = pair
-    return metric.measure(test_case)
-
-
-def compute_geval_scores(report_path: str | Path, max_concurrency: int = 4) -> dict[str, dict]:
-    data = json.loads(Path(report_path).read_text(encoding="utf-8"))
-    jd_text = _format_jd_text(data["jd"])
-
-    test_cases: list[LLMTestCase] = []
-    for judge_result in data["judge_results"].values():
-        judge_text = _format_judge_result_text(judge_result)
-        test_cases.append(build_test_case(jd_text, judge_text))
-
-    # Every (metric, candidate) pair is measured concurrently, capped by
-    # max_concurrency - the two metrics no longer run as two fully sequential
-    # passes over all candidates, and candidates within a metric no longer
-    # block one another either. Thread-pool based, matching how the
-    # production pipeline's judge/extractor stages already batch LLM calls
-    # via LangChain's Runnable.batch(config={"max_concurrency": ...}).
-    pairs = [(metric, test_case) for metric in _GEVAL_METRICS for test_case in test_cases]
-    if pairs:
-        with ThreadPoolExecutor(max_workers=max_concurrency) as executor:
-            all_scores = list(executor.map(_measure_pair, pairs))
-    else:
-        all_scores = []
-
-    results: dict[str, dict] = {}
-    n = len(test_cases)
-    for i, metric in enumerate(_GEVAL_METRICS):
-        scores = all_scores[i * n : (i + 1) * n]
-        results[metric.name] = _aggregate_scores(scores, metric.threshold)
-    return results
-
-
-def build_eval_markdown_report(report_paths: list[str | Path], max_concurrency: int = 4) -> str:
+def build_eval_markdown_report(report_paths: list[str | Path]) -> str:
     primary = report_paths[0]
     data = json.loads(Path(primary).read_text(encoding="utf-8"))
     stats = compute_pipeline_stats(primary)
-    geval = compute_geval_scores(primary, max_concurrency=max_concurrency)
 
     lines = [
         "# Evaluation Metric Report",
@@ -129,26 +51,7 @@ def build_eval_markdown_report(report_paths: list[str | Path], max_concurrency: 
         f"| Dropped by pre-filter | {stats['dropped_prefilter']} |",
         f"| Evaluated by Judge | {stats['evaluated_by_judge']} |",
         f"| Hallucination Rate | {stats['hallucination_rate']:.1%} |",
-        "",
-        "## GEval Metrics",
-        "",
-        "| Metric | n | Mean | Std Dev | Pass Rate |",
-        "|---|---|---|---|---|",
     ]
-    for name in ("RecruiterAlignment", "EvidenceRelevancy"):
-        m = geval[name]
-        mean_str = f"{m['mean']:.3f}" if m["mean"] is not None else "N/A"
-        std_str = f"{m['std']:.3f}" if m["std"] is not None else "N/A"
-        pass_str = f"{m['pass_rate']:.1%}" if m["pass_rate"] is not None else "N/A"
-        lines.append(f"| {name} | {m['n']} | {mean_str} | {std_str} | {pass_str} |")
-
-    lines.append(
-        "\n_Note: quote authenticity is already measured deterministically by the "
-        "hallucination checker (see Hallucination Rate above), which strips unverified "
-        "evidence before calibration — RecruiterAlignment and EvidenceRelevancy are the "
-        "GEval signals here, since judge-quality questions like calibration and "
-        "claim-quote relevance have no deterministic equivalent._"
-    )
 
     stage_timings = data.get("stage_timings") or {}
     if stage_timings:
@@ -177,9 +80,5 @@ def build_eval_markdown_report(report_paths: list[str | Path], max_concurrency: 
     return "\n".join(lines)
 
 
-def write_eval_markdown_report(
-    report_paths: list[str | Path], path: str | Path, max_concurrency: int = 4
-) -> None:
-    Path(path).write_text(
-        build_eval_markdown_report(report_paths, max_concurrency=max_concurrency), encoding="utf-8"
-    )
+def write_eval_markdown_report(report_paths: list[str | Path], path: str | Path) -> None:
+    Path(path).write_text(build_eval_markdown_report(report_paths), encoding="utf-8")

@@ -1,11 +1,7 @@
 import json
-import threading
-import time
 from pathlib import Path
-from unittest.mock import Mock
 
-from evaluation.metrics import evidence_relevancy_metric, recruiter_alignment_metric
-from evaluation.report import compute_geval_scores, compute_pipeline_stats
+from evaluation.report import compute_pipeline_stats
 
 
 def _write_report(path: Path, **overrides) -> None:
@@ -71,158 +67,41 @@ def test_compute_pipeline_stats_hallucination_rate_is_zero_when_no_one_judged(tm
     assert stats["hallucination_rate"] == 0.0
 
 
-def _write_geval_report(path: Path, judge_results: dict, profiles: dict | None = None) -> None:
+def _write_calibrated_report(path: Path, ranks: dict[str, int]) -> None:
     _write_report(
         path,
-        profiles=profiles
-        or {candidate_id: {"raw_cv_text": f"{candidate_id} cv"} for candidate_id in judge_results},
-        judge_results=judge_results,
-    )
-
-
-def test_compute_geval_scores_aggregates_two_candidates(tmp_path, monkeypatch):
-    report_path = tmp_path / "report.json"
-    _write_geval_report(
-        report_path,
-        judge_results={
-            "alice": {"tier": "Strong Fit", "rating": 9, "evidence": [{"claim": "c1", "quote": "q1"}]},
-            "bob": {"tier": "Weak Fit", "rating": 3, "evidence": [{"claim": "c2", "quote": "q2"}]},
-        },
-    )
-
-    recruiter_alignment_mock = Mock(side_effect=[0.8, 0.4])
-    monkeypatch.setattr(recruiter_alignment_metric, "measure", recruiter_alignment_mock)
-    monkeypatch.setattr(evidence_relevancy_metric, "measure", Mock(side_effect=[1.0, 0.6]))
-
-    scores = compute_geval_scores(report_path)
-
-    assert round(scores["RecruiterAlignment"]["mean"], 4) == 0.6
-    assert scores["EvidenceRelevancy"]["pass_rate"] == 0.5  # only 1.0 >= 0.7 threshold
-
-    # Verify that test cases were constructed correctly with proper data wiring
-    assert recruiter_alignment_mock.call_count == 2
-    call_args_list = recruiter_alignment_mock.call_args_list
-
-    # Check alice's test case (first call)
-    alice_test_case = call_args_list[0][0][0]
-    assert 'c1: "q1"' in alice_test_case.actual_output
-    assert "Title: ML Engineer" in alice_test_case.input
-    assert "Required skills: Python, PyTorch" in alice_test_case.input
-
-    # Check bob's test case (second call)
-    bob_test_case = call_args_list[1][0][0]
-    assert 'c2: "q2"' in bob_test_case.actual_output
-    assert "Title: ML Engineer" in bob_test_case.input
-    assert "Required skills: Python, PyTorch" in bob_test_case.input
-
-
-def test_compute_geval_scores_empty_judge_results_returns_none_fields(tmp_path, monkeypatch):
-    report_path = tmp_path / "report.json"
-    _write_geval_report(report_path, judge_results={})
-
-    mock = Mock()
-    monkeypatch.setattr(recruiter_alignment_metric, "measure", mock)
-    monkeypatch.setattr(evidence_relevancy_metric, "measure", mock)
-
-    scores = compute_geval_scores(report_path)
-
-    assert scores["RecruiterAlignment"] == {"n": 0, "mean": None, "std": None, "pass_rate": None}
-    mock.assert_not_called()
-
-
-def test_compute_geval_scores_runs_concurrently_bounded_by_max_concurrency(tmp_path, monkeypatch):
-    # Guards against a regression back to the old fully-sequential loop: this
-    # tracks how many measure() calls are simultaneously in flight in real OS
-    # threads (across BOTH metrics, since they share one thread-pool budget)
-    # and asserts it actually exceeds 1 (proving overlap happens) while never
-    # exceeding the configured max_concurrency (proving it's bounded).
-    report_path = tmp_path / "report.json"
-    _write_geval_report(
-        report_path,
-        judge_results={
-            f"c{i}": {"tier": "Strong Fit", "rating": 8, "evidence": []} for i in range(6)
-        },
-    )
-
-    lock = threading.Lock()
-    in_flight = 0
-    max_in_flight = 0
-
-    def fake_measure(test_case):
-        nonlocal in_flight, max_in_flight
-        with lock:
-            in_flight += 1
-            max_in_flight = max(max_in_flight, in_flight)
-        time.sleep(0.05)
-        with lock:
-            in_flight -= 1
-        return 0.9
-
-    monkeypatch.setattr(recruiter_alignment_metric, "measure", fake_measure)
-    monkeypatch.setattr(evidence_relevancy_metric, "measure", fake_measure)
-
-    compute_geval_scores(report_path, max_concurrency=3)
-
-    assert 1 < max_in_flight <= 3
-
-
-def test_compute_geval_scores_single_candidate_std_is_none(tmp_path, monkeypatch):
-    report_path = tmp_path / "report.json"
-    _write_geval_report(
-        report_path,
-        judge_results={"alice": {"tier": "Weak Fit", "rating": 4, "evidence": []}},
-    )
-
-    monkeypatch.setattr(recruiter_alignment_metric, "measure", Mock(return_value=0.6))
-    monkeypatch.setattr(evidence_relevancy_metric, "measure", Mock(return_value=0.6))
-
-    scores = compute_geval_scores(report_path)
-
-    assert scores["RecruiterAlignment"]["n"] == 1
-    assert scores["RecruiterAlignment"]["mean"] == 0.6
-    assert scores["RecruiterAlignment"]["std"] is None
-    assert scores["RecruiterAlignment"]["pass_rate"] == 0.0  # 0.6 < 0.7 threshold
-
-
-def _write_calibrated_report(path: Path, ranks: dict[str, int]) -> None:
-    _write_geval_report(
-        path,
+        profiles={candidate_id: {"raw_cv_text": f"{candidate_id} cv"} for candidate_id in ranks},
         judge_results={
             candidate_id: {"tier": "Strong Fit", "rating": 8, "evidence": []}
             for candidate_id in ranks
         },
+        calibrated_results=[
+            {
+                "candidate_id": candidate_id,
+                "final_rank": final_rank,
+                "tier": "Strong Fit",
+                "rating": 8,
+                "calibration_notes": "",
+            }
+            for candidate_id, final_rank in ranks.items()
+        ],
     )
-    data = json.loads(path.read_text(encoding="utf-8"))
-    data["calibrated_results"] = [
-        {
-            "candidate_id": candidate_id,
-            "final_rank": final_rank,
-            "tier": "Strong Fit",
-            "rating": 8,
-            "calibration_notes": "",
-        }
-        for candidate_id, final_rank in ranks.items()
-    ]
-    path.write_text(json.dumps(data), encoding="utf-8")
 
 
-def test_build_eval_markdown_report_single_run_omits_rank_stability(tmp_path, monkeypatch):
+def test_build_eval_markdown_report_single_run_omits_rank_stability(tmp_path):
     from evaluation.report import build_eval_markdown_report
 
     report_path = tmp_path / "report.json"
     _write_calibrated_report(report_path, {"alice": 1, "bob": 2})
 
-    monkeypatch.setattr(recruiter_alignment_metric, "measure", Mock(return_value=0.9))
-    monkeypatch.setattr(evidence_relevancy_metric, "measure", Mock(return_value=0.9))
-
     markdown = build_eval_markdown_report([report_path])
 
     assert "## Pipeline Stats" in markdown
-    assert "## GEval Metrics" in markdown
+    assert "## GEval Metrics" not in markdown
     assert "## Rank Stability" not in markdown
 
 
-def test_build_eval_markdown_report_multi_run_includes_rank_stability(tmp_path, monkeypatch):
+def test_build_eval_markdown_report_multi_run_includes_rank_stability(tmp_path):
     from evaluation.report import build_eval_markdown_report
 
     report_a = tmp_path / "report_a.json"
@@ -230,39 +109,18 @@ def test_build_eval_markdown_report_multi_run_includes_rank_stability(tmp_path, 
     _write_calibrated_report(report_a, {"alice": 1, "bob": 2})
     _write_calibrated_report(report_b, {"alice": 1, "bob": 2})
 
-    monkeypatch.setattr(recruiter_alignment_metric, "measure", Mock(return_value=0.9))
-    monkeypatch.setattr(evidence_relevancy_metric, "measure", Mock(return_value=0.9))
-
     markdown = build_eval_markdown_report([report_a, report_b])
 
     assert "## Rank Stability" in markdown
     assert "1.000" in markdown  # identical rankings -> spearman/kendall == 1.0
 
 
-def test_build_eval_markdown_report_includes_geval_signal_caveat(tmp_path, monkeypatch):
-    from evaluation.report import build_eval_markdown_report
-
-    report_path = tmp_path / "report.json"
-    _write_calibrated_report(report_path, {"alice": 1})
-
-    monkeypatch.setattr(recruiter_alignment_metric, "measure", Mock(return_value=0.9))
-    monkeypatch.setattr(evidence_relevancy_metric, "measure", Mock(return_value=0.9))
-
-    markdown = build_eval_markdown_report([report_path])
-
-    assert "measured deterministically by the hallucination checker" in markdown
-    assert "RecruiterAlignment and EvidenceRelevancy are the GEval signals" in markdown
-
-
-def test_write_eval_markdown_report_writes_file(tmp_path, monkeypatch):
+def test_write_eval_markdown_report_writes_file(tmp_path):
     from evaluation.report import write_eval_markdown_report
 
     report_path = tmp_path / "report.json"
     _write_calibrated_report(report_path, {"alice": 1})
     out_path = tmp_path / "evaluation-metric.md"
-
-    monkeypatch.setattr(recruiter_alignment_metric, "measure", Mock(return_value=0.9))
-    monkeypatch.setattr(evidence_relevancy_metric, "measure", Mock(return_value=0.9))
 
     write_eval_markdown_report([report_path], out_path)
 
@@ -270,7 +128,7 @@ def test_write_eval_markdown_report_writes_file(tmp_path, monkeypatch):
     assert "## Pipeline Stats" in out_path.read_text(encoding="utf-8")
 
 
-def test_build_eval_markdown_report_includes_stage_timings_when_present(tmp_path, monkeypatch):
+def test_build_eval_markdown_report_includes_stage_timings_when_present(tmp_path):
     from evaluation.report import build_eval_markdown_report
 
     report_path = tmp_path / "report.json"
@@ -279,9 +137,6 @@ def test_build_eval_markdown_report_includes_stage_timings_when_present(tmp_path
     data["stage_timings"] = {"extract_profiles": 1.5, "judge": 3.25}
     report_path.write_text(json.dumps(data), encoding="utf-8")
 
-    monkeypatch.setattr(recruiter_alignment_metric, "measure", Mock(return_value=0.9))
-    monkeypatch.setattr(evidence_relevancy_metric, "measure", Mock(return_value=0.9))
-
     markdown = build_eval_markdown_report([report_path])
 
     assert "## Stage Timings" in markdown
@@ -289,7 +144,7 @@ def test_build_eval_markdown_report_includes_stage_timings_when_present(tmp_path
     assert "| judge | 3.250 |" in markdown
 
 
-def test_build_eval_markdown_report_omits_stage_timings_when_absent(tmp_path, monkeypatch):
+def test_build_eval_markdown_report_omits_stage_timings_when_absent(tmp_path):
     from evaluation.report import build_eval_markdown_report
 
     report_path = tmp_path / "report.json"
@@ -297,9 +152,6 @@ def test_build_eval_markdown_report_omits_stage_timings_when_absent(tmp_path, mo
     # NOTE: intentionally does NOT add "stage_timings" — simulates an older
     # report.json written before this key existed, to guard against a
     # KeyError regression.
-
-    monkeypatch.setattr(recruiter_alignment_metric, "measure", Mock(return_value=0.9))
-    monkeypatch.setattr(evidence_relevancy_metric, "measure", Mock(return_value=0.9))
 
     markdown = build_eval_markdown_report([report_path])
 
