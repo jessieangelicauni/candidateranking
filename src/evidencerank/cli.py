@@ -58,7 +58,7 @@ def rank(jd_path, resumes_dir, llm_concurrency):
 
     from evaluation.report import write_eval_markdown_report
 
-    write_eval_markdown_report([OUT_JSON], OUT_EVAL_REPORT, max_concurrency=llm_concurrency)
+    write_eval_markdown_report([OUT_JSON], OUT_EVAL_REPORT)
     click.echo(f"Wrote {OUT_EVAL_REPORT}")
 
 
