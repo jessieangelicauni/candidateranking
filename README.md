@@ -18,7 +18,6 @@ the original design doc.
    ```bash
    ollama pull qwen2.5:7b-instruct
    ollama pull qwen2.5:14b-instruct
-   ollama pull qwen3:14b  # GEval judge for the evaluation harness (evaluation-metric.md)
    ```
 3. Install project dependencies: `uv sync`
 4. Set required environment variables (see [Environment variables](#environment-variables) below)
@@ -112,9 +111,9 @@ redacted for blind evaluation; see the design spec's Fairness section). Don't tr
 share `report.json` as if it were already anonymized.
 
 Every run also generates the evaluation metric report (`evaluation-metric.md`) — see
-[Evaluation metric report](#evaluation-metric-report) below for what it contains. This
-requires `ollama serve` running locally with the eval judge model available (same as the
-standalone `evidencerank-eval-report` command).
+[Evaluation metric report](#evaluation-metric-report) below for what it contains. This is
+pure computation over the run's `report.json` (no LLM calls, no extra setup beyond what
+`rank` already requires).
 
 ## Model configuration
 
@@ -135,38 +134,26 @@ cp .env.example .env
 ```
 
 `.env` is loaded automatically (via `python-dotenv`) whenever you run `uv run evidencerank`
-or import `evaluation.metrics` — no manual `export` needed. `.env` is gitignored — never
-commit real tokens.
+— no manual `export` needed. `.env` is gitignored — never commit real tokens.
 
 | Variable | Required for | Notes |
 | --- | --- | --- |
 | `HF_TOKEN` | Downloading the `BAAI/bge-small-en-v1.5` embedding model used by the pre-filter stage | Only needed if you hit Hugging Face Hub rate limits/auth requirements on first download; the model is cached locally afterward. Get a token at https://huggingface.co/settings/tokens. |
-| `EVIDENCERANK_EVAL_MODEL` | `evaluation/metrics.py` GEval metrics | Optional. Ollama model used as the GEval judge; defaults to `qwen3:14b` (`ollama pull qwen3:14b`). Requires `ollama serve` running locally, same as the production pipeline. |
 
 ## Research evaluation harness
 
 The `evaluation/` package is separate from the production pipeline (`src/evidencerank/`):
 
-- `evaluation/metrics.py` — DeepEval `GEval` metrics (RecruiterAlignment, EvidenceRelevancy)
-  to run against pipeline output. There is deliberately no GEval "Groundedness" metric —
-  quote authenticity is already measured deterministically by the production pipeline's
-  hallucination checker (see Hallucination Rate below), which is strictly more reliable
-  for that question than an LLM re-judging it (see the caveat below).
 - `evaluation/rank_stability.py` — computes Spearman/Kendall-tau rank correlation across
-  repeated runs on the same input, to report LLM judgment consistency.
+  repeated runs on the same input, to report ranking consistency.
 - `evaluation/report.py` — aggregates the above (plus pipeline stats: candidates
   submitted, pre-filter pass/drop, hallucination rate) into a single Markdown
   evaluation report, suitable for a paper appendix.
 
-The two `GEval` metrics in `evaluation/metrics.py` use a local Ollama model as the
-judge (`EVIDENCERANK_EVAL_MODEL`, see [Environment variables](#environment-variables)) —
-no external API key required, same as the production pipeline, though a different model
-by default (`qwen3:14b`, a reasoning model, rather than the production judge's
-`qwen2.5:14b-instruct`). A non-reasoning model of the same size was measurably less
-reliable as an evaluator: it sometimes misjudged its own side-by-side text comparison
-(e.g. claiming a quote didn't match the resume when it was in fact an exact match),
-dragging down GEval scores with the eval judge's own errors rather than real
-production-pipeline defects.
+Both signals are deterministic — fuzzy string-matching for the hallucination rate,
+rank-correlation statistics for rank stability — with no LLM judging another LLM's
+output involved, and no extra model or `ollama serve` requirement beyond what the
+production pipeline itself already needs.
 
 To measure rank stability, `uv run evidencerank-rank-stability` runs the pipeline
 multiple times on the same JD/resumes automatically — no manual renaming needed:
@@ -177,9 +164,9 @@ uv run evidencerank-rank-stability --jd machine_learning_engineer.txt --resumes-
 
 This runs the pipeline `--runs` times (default `3`, minimum `2`), writes each run's full
 report as `run1.json`, `run2.json`, ... (never overwritten, so every run stays available
-for inspection), and builds `evaluation-metric.md` from all of them — GEval scores and
-pipeline stats from `run1.json`, rank stability (Spearman/Kendall-tau) across all of
-them. `--llm-concurrency` and `--out` work the same as the other commands.
+for inspection), and builds `evaluation-metric.md` from all of them — pipeline stats
+from `run1.json`, rank stability (Spearman/Kendall-tau) across all of them.
+`--llm-concurrency` and `--out` work the same as the other commands.
 
 If you'd rather drive this manually (e.g. against runs you already have, or with
 resumes/JD changing between runs), run the pipeline yourself N times, renaming
@@ -188,9 +175,8 @@ resumes/JD changing between runs), run the pipeline yourself N times, renaming
 
 ### Evaluation metric report
 
-`uv run evidencerank-eval-report` builds a Markdown report combining GEval metric
-aggregates, pipeline stats, and (when 2+ runs are given) rank stability, from one or
-more existing `report.json` files:
+`uv run evidencerank-eval-report` builds a Markdown report combining pipeline stats and
+(when 2+ runs are given) rank stability, from one or more existing `report.json` files:
 
 ```bash
 uv run evidencerank-eval-report --reports report.json --out evaluation-metric.md
@@ -209,18 +195,15 @@ uv run evidencerank-eval-report \
   --out evaluation-metric.md
 ```
 
-GEval scores and pipeline stats are always computed from the first `--reports` path
-given; every path is used for rank stability. This requires `ollama serve` running
-locally (same GEval judge model as above) — the GEval calls are not mocked outside
-of tests.
+Pipeline stats are always computed from the first `--reports` path given; every path is
+used for rank stability. Both are pure computation over `report.json` — no `ollama serve`
+or model required to build this report.
 
 When the underlying `report.json` includes per-stage timing (`stage_timings`,
 added by the production pipeline), the report also includes a "Stage Timings"
 table showing wall-clock seconds per stage — absent for older `report.json`
 files that predate this field.
 
-Quote authenticity itself isn't a GEval metric (see Research evaluation harness above) —
-it's already measured deterministically via Hallucination Rate in Pipeline Stats, since
-the hallucination checker strips unverified evidence before calibration. RecruiterAlignment
-and EvidenceRelevancy are the GEval signals for judge quality, since calibration and
-claim-quote relevance have no deterministic equivalent.
+Quote authenticity is measured deterministically via Hallucination Rate in Pipeline
+Stats — the hallucination checker strips unverified evidence before calibration, so
+this is a direct count from that check, not a judgment call by any model.
