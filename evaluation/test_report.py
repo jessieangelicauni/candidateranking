@@ -157,13 +157,11 @@ def test_compute_pipeline_stats_counts_candidates(tmp_path):
         "dropped_prefilter": 1,
         "evaluated_by_judge": 2,
         "hallucination_rate": 0.5,
-        "mean_evidence_relevancy": 0.0,  # no evidence claims in this fixture
+        "mean_evidence_relevancy": 0.0,
     }
 
 
 def test_compute_pipeline_stats_hallucination_rate_is_zero_when_no_one_judged(tmp_path):
-    # Guards against a ZeroDivisionError when every candidate is dropped at
-    # pre-filter and no one reaches the Judge.
     report_path = tmp_path / "report.json"
     _write_report(report_path, profiles={}, judge_results={}, hallucination_reports={})
 
@@ -173,11 +171,6 @@ def test_compute_pipeline_stats_hallucination_rate_is_zero_when_no_one_judged(tm
 
 
 class _FakeRelevancyEmbedder:
-    # Deterministic stand-in for the real sentence-transformer: text
-    # containing "Python" gets an axis-aligned vector, "Baking" gets the
-    # orthogonal axis, anything else gets an equal blend - lets tests assert
-    # exact cosine-similarity outcomes instead of tolerating a real model's
-    # noise.
     def encode(self, texts):
         import numpy as np
 
@@ -217,8 +210,6 @@ def test_compute_pipeline_stats_evidence_relevancy_scores_relevant_claims_higher
 
     stats = compute_pipeline_stats(report_path)
 
-    # relevant candidate's claim is identical-axis to the JD's "Python" requirement (cosine 1.0),
-    # irrelevant candidate's claim is orthogonal (cosine 0.0) -> mean of the two candidates is 0.5.
     assert stats["mean_evidence_relevancy"] == 0.5
 
 
@@ -324,6 +315,56 @@ def test_build_markdown_report_includes_rankings_and_pipeline_stats(tmp_path):
     assert "## Pipeline Stats" in markdown
 
 
+def test_build_markdown_report_pipeline_stats_is_mean_across_multiple_reports(tmp_path):
+    report_a = tmp_path / "report_a.json"
+    _write_report(
+        report_a,
+        profiles={c: {"raw_cv_text": c} for c in ["a1", "a2", "a3", "a4"]},
+        dropped=[
+            {"candidate_id": "a3", "reason": "x"},
+            {"candidate_id": "a4", "reason": "x"},
+        ],
+        judge_results={
+            "a1": {"tier": "Strong Fit", "rating": 9, "evidence": []},
+            "a2": {"tier": "Strong Fit", "rating": 8, "evidence": []},
+        },
+        hallucination_reports={
+            "a1": {"candidate_id": "a1", "unverified_quotes": []},
+            "a2": {"candidate_id": "a2", "unverified_quotes": []},
+        },
+        calibrated_results=[
+            {"candidate_id": "a1", "final_rank": 1, "tier": "Strong Fit", "rating": 9, "calibration_notes": ""},
+            {"candidate_id": "a2", "final_rank": 2, "tier": "Strong Fit", "rating": 8, "calibration_notes": ""},
+        ],
+    )
+
+    report_b = tmp_path / "report_b.json"
+    _write_report(
+        report_b,
+        profiles={c: {"raw_cv_text": c} for c in ["a1", "a2", "a3", "a4"]},
+        dropped=[],
+        judge_results={
+            c: {"tier": "Strong Fit", "rating": 8, "evidence": []} for c in ["a1", "a2", "a3", "a4"]
+        },
+        hallucination_reports={
+            "a1": {"candidate_id": "a1", "unverified_quotes": ["fabricated"]},
+            "a2": {"candidate_id": "a2", "unverified_quotes": ["fabricated"]},
+            "a3": {"candidate_id": "a3", "unverified_quotes": []},
+            "a4": {"candidate_id": "a4", "unverified_quotes": []},
+        },
+        calibrated_results=[
+            {"candidate_id": "a1", "final_rank": 1, "tier": "Strong Fit", "rating": 8, "calibration_notes": ""},
+            {"candidate_id": "a2", "final_rank": 2, "tier": "Strong Fit", "rating": 8, "calibration_notes": ""},
+        ],
+    )
+
+    markdown = build_markdown_report([report_a, report_b])
+
+    assert f"| {report_a} | 4 | 2 | 2 | 2 | 0.0% |" in markdown
+    assert f"| {report_b} | 4 | 4 | 0 | 4 | 50.0% |" in markdown
+    assert "| **Mean** | 4 | 3 | 1 | 3 | 25.0% |" in markdown
+
+
 def test_build_markdown_report_single_run_omits_rank_stability(tmp_path):
     report_path = tmp_path / "report.json"
     _write_calibrated_report(report_path, {"alice": 1, "bob": 2})
@@ -342,7 +383,7 @@ def test_build_markdown_report_multi_run_includes_rank_stability(tmp_path):
     markdown = build_markdown_report([report_a, report_b])
 
     assert "## Rank Stability" in markdown
-    assert "1.000" in markdown  # identical rankings -> spearman/kendall == 1.0
+    assert "1.000" in markdown
 
 
 def test_write_markdown_report_writes_file(tmp_path):
@@ -373,9 +414,6 @@ def test_build_markdown_report_includes_stage_timings_when_present(tmp_path):
 def test_build_markdown_report_omits_stage_timings_when_absent(tmp_path):
     report_path = tmp_path / "report.json"
     _write_calibrated_report(report_path, {"alice": 1})
-    # NOTE: intentionally does NOT add "stage_timings" — simulates an older
-    # report.json written before this key existed, to guard against a
-    # KeyError regression.
 
     markdown = build_markdown_report([report_path])
 
@@ -431,19 +469,12 @@ def test_build_markdown_report_escapes_pipes_and_newlines_in_notes(tmp_path):
     markdown = build_markdown_report([report_path])
     data_row = next(line for line in markdown.splitlines() if line.startswith("| 1 |"))
 
-    # No embedded newline leaked into the output.
     assert "\n" not in data_row
-
-    # The literal pipe from the notes text was escaped (backslash-pipe), not left
-    # as a bare separator that would split the notes into extra table columns.
     assert "Great fit \\| but watch out for gaps in employment" in data_row
     assert "Great fit | but" not in data_row
 
-    # Exactly 7 well-formed columns: splitting on the escaped-pipe-protected row
-    # (only unescaped pipes act as separators) yields the 7 data fields plus the
-    # two empty strings from the leading/trailing pipe.
     unescaped_split = data_row.replace("\\|", "").split("|")
-    assert len(unescaped_split) == 9  # "", rank, candidate, tier, rating, evidence, flags, notes, ""
+    assert len(unescaped_split) == 9
 
 
 def test_build_markdown_report_escapes_pipes_and_newlines_in_evidence(tmp_path):
@@ -468,18 +499,13 @@ def test_build_markdown_report_escapes_pipes_and_newlines_in_evidence(tmp_path):
     markdown = build_markdown_report([report_path])
     data_row = next(line for line in markdown.splitlines() if line.startswith("| 1 |"))
 
-    # No embedded newline leaked into the output.
     assert "\n" not in data_row
-
-    # The literal pipe from the quote was escaped, and both evidence claims made it
-    # into the same cell (joined, not split across rows/columns).
     assert "Led team: Managed 5 \\| 10 person teams across two years" in data_row
     assert "Shipped feature: Delivered on time" in data_row
     assert "Managed 5 | 10 person" not in data_row
 
-    # Exactly 7 well-formed columns: only unescaped pipes act as separators.
     unescaped_split = data_row.replace("\\|", "").split("|")
-    assert len(unescaped_split) == 9  # "", rank, candidate, tier, rating, evidence, flags, notes, ""
+    assert len(unescaped_split) == 9
 
 
 def test_build_markdown_report_shows_removed_count_for_flagged_candidate(tmp_path):
@@ -522,9 +548,6 @@ def test_build_markdown_report_shows_dash_when_hallucination_report_has_no_unver
 
 
 def test_build_markdown_report_tables_have_header_separator_rows(tmp_path):
-    # Regression test: a Markdown table without a "|---|---|" separator row
-    # right after the header renders as plain text, not a table, in GitHub/VS
-    # Code/any CommonMark renderer.
     report_a = tmp_path / "report_a.json"
     report_b = tmp_path / "report_b.json"
     _write_calibrated_report(report_a, {"alice": 1, "bob": 2})
@@ -536,9 +559,21 @@ def test_build_markdown_report_tables_have_header_separator_rows(tmp_path):
     markdown = build_markdown_report([report_a, report_b])
 
     assert "| Rank | Candidate | Tier | Rating | Key Evidence | Hallucination Flags | Calibration Notes |\n|---|---|---|---|---|---|---|" in markdown
-    assert "| Metric | Value |\n|---|---|" in markdown
+    assert (
+        "| Run | Total candidates | Passed pre-filter | Dropped by pre-filter "
+        "| Evaluated by Judge | Hallucination Rate | Evidence Relevancy |\n|---|---|---|---|---|---|---|"
+    ) in markdown
     assert "| Stage | Seconds |\n|---|---|" in markdown
     assert "| Runs | Mean Spearman | Mean Kendall Tau |\n|---|---|---|" in markdown
+
+
+def test_build_markdown_report_pipeline_stats_table_has_separator_row_for_single_run(tmp_path):
+    report_path = tmp_path / "report.json"
+    _write_calibrated_report(report_path, {"alice": 1})
+
+    markdown = build_markdown_report([report_path])
+
+    assert "| Metric | Value |\n|---|---|" in markdown
 
 
 def test_build_markdown_report_shows_dash_when_no_hallucination_report_present(tmp_path):
@@ -603,9 +638,6 @@ def test_rank_stability_reversed_rankings_scores_negative_one(tmp_path):
 
 
 def test_rank_stability_intersects_candidate_ids_across_runs(tmp_path):
-    # run2's shortlist doesn't include "d" (e.g. it ranked outside the judge's
-    # top 10 in that run). The shared candidates a, b, c have identical
-    # relative order in both runs, so correlation over just {a, b, c} is 1.0.
     run1 = tmp_path / "run1.json"
     run2 = tmp_path / "run2.json"
     _write_rank_stability_report(run1, {"a": 1, "b": 2, "c": 3, "d": 4})

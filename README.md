@@ -75,10 +75,10 @@ dash (`—`) means every quote verified.
 Two thresholds are fixed (not CLI-configurable). The embedding pre-filter checks each
 JD required skill individually against a candidate's skill list — a required skill
 "exists" for that candidate if any one of their skills has cosine similarity `>= 0.9`
-to it — and the candidate passes if at least `75%` of the JD's required skills exist
-for them (`MIN_REQUIRED_SKILLS_FRACTION = 0.75` in `prefilter.py`, a proportion of
+to it — and the candidate passes if at least `50%` of the JD's required skills exist
+for them (`MIN_REQUIRED_SKILLS_FRACTION = 0.5` in `prefilter.py`, a proportion of
 however many required skills the JD lists, not a fixed headcount — a JD with 4
-required skills needs 3 matched, a JD with 16 needs 12). (This is a per-skill existence
+required skills needs 2 matched, a JD with 16 needs 8). (This is a per-skill existence
 count feeding that proportion, not a single whole-list similarity score — a candidate
 whose skills are all generically tech-adjacent but don't individually match specific
 required skills like "Machine Learning" or "PyTorch" will fail even if a naive
@@ -201,8 +201,9 @@ uv run evidencerank rank --jd ai_data_engineer.txt --resumes-dir resumes --runs 
 This runs the pipeline `--runs` times, writes each run's full report as `run1.json`,
 `run2.json`, ... (never overwritten, so every run stays available for inspection —
 `report.json` itself is not written in this mode), and builds `report.md` from all of
-them — rankings and pipeline stats from `run1.json`, rank stability (Spearman/Kendall-tau)
-across all of them. `--llm-concurrency` and `--out` work the same as a single run.
+them — rankings from `run1.json`, Pipeline Stats broken down per run plus a mean row
+(see below), rank stability (Spearman/Kendall-tau) across all of them.
+`--llm-concurrency` and `--out` work the same as a single run.
 
 ### Folding in past runs
 
@@ -219,10 +220,19 @@ uv run evidencerank rank \
 ```
 
 This run's own output (`report.json`, or `run1.json..runN.json` if `--runs` > 1) is
-always used for the Rankings/Pipeline Stats sections; every `--reports` path plus this
-run's own output(s) together feed the Rank Stability comparison whenever there are 2+
-reports in total. `--reports` alone doesn't skip the pipeline — it's additive input on
-top of a real run, not a replacement for one.
+always used for the Rankings section specifically; every `--reports` path plus this
+run's own output(s) together feed Pipeline Stats and the Rank Stability comparison
+whenever there are 2+ reports in total. `--reports` alone doesn't skip the pipeline —
+it's additive input on top of a real run, not a replacement for one.
+
+With a single report, Pipeline Stats is the familiar `Metric | Value` table. With 2+
+reports, it switches to one row per report (`Run | Total candidates | Passed
+pre-filter | ...`) plus a final `**Mean**` row averaging each metric across all of
+them — so you can see both each run's own numbers and the aggregate at a glance, not
+just one or the other. Candidate counts (`Total candidates`, `Passed pre-filter`,
+etc.) in the `Mean` row display as a whole number when every report agrees, or with
+one decimal place when they don't (e.g. pre-filter/extraction results varying
+slightly between runs).
 
 When the underlying `report.json` includes per-stage timing (`stage_timings`,
 added by the production pipeline), the report also includes a "Stage Timings"

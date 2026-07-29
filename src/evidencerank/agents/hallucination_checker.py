@@ -7,6 +7,7 @@ from evidencerank.models import CandidateProfile, HallucinationReport, JudgeResu
 DEFAULT_THRESHOLD = 85.0
 
 _WHITESPACE_RE = re.compile(r"\s+")
+_ELLIPSIS_MARKERS = ("...", "…")
 
 
 def _normalize_whitespace(text: str) -> str:
@@ -18,14 +19,12 @@ def check_evidence(
     profile: CandidateProfile,
     threshold: float = DEFAULT_THRESHOLD,
 ) -> HallucinationReport:
-    """Verify every Judge quote against profile.raw_cv_text, the single source of truth. 
-    A quote is valid only if it appears verbatim in the original resume. 
-    Ignore parsed or extracted CV fields, as they may omit or alter content. 
-    If the Judge quotes text containing extraction errors instead of the original resume, mark it as invalid.
-    """
     normalized_cv_text = _normalize_whitespace(profile.raw_cv_text)
     unverified = []
     for claim in judge_result.evidence:
+        if any(marker in claim.quote for marker in _ELLIPSIS_MARKERS):
+            unverified.append(claim.quote)
+            continue
         normalized_quote = _normalize_whitespace(claim.quote)
         score = fuzz.partial_ratio(normalized_quote, normalized_cv_text)
         if score < threshold:

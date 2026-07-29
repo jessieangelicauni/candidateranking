@@ -19,8 +19,6 @@ def test_cosine_similarity_orthogonal_vectors_is_zero():
 
 
 def test_prefilter_candidate_passes_when_fraction_matched_is_above_threshold():
-    # 6 required skills; candidate literally has 5 of them plus one unrelated
-    # skill -> 0.833 fraction, above MIN_REQUIRED_SKILLS_FRACTION (0.75).
     result = prefilter_candidate(
         candidate_id="c1",
         jd_required_skills=["Python", "Machine Learning", "PyTorch", "SQL", "GCP", "Docker"],
@@ -33,45 +31,36 @@ def test_prefilter_candidate_passes_when_fraction_matched_is_above_threshold():
 
 
 def test_prefilter_candidate_fails_when_fraction_matched_is_below_threshold():
-    # Candidate only literally has 4 of the 6 required skills -> 0.667
-    # fraction, below MIN_REQUIRED_SKILLS_FRACTION (0.75) even though 4 are
-    # exact matches.
     result = prefilter_candidate(
         candidate_id="c2",
         jd_required_skills=["Python", "Machine Learning", "PyTorch", "SQL", "GCP", "Docker"],
-        candidate_skills=["Python", "PyTorch", "SQL", "GCP", "Baking", "Pastry decoration"],
+        candidate_skills=["Python", "PyTorch", "Baking", "Pastry decoration", "Kitchen sanitation", "Menu planning"],
         threshold=0.9,
     )
     assert result.passed is False
-    assert abs(result.similarity - (4 / 6)) < 1e-6
+    assert abs(result.similarity - (2 / 6)) < 1e-6
 
 
 def test_prefilter_candidate_passes_at_exactly_the_fraction_boundary():
-    # 4 required skills, candidate matches 3 of them -> 0.75 fraction, exactly
-    # at MIN_REQUIRED_SKILLS_FRACTION. Passing is a proportion of the JD's
-    # required skills now, not an absolute headcount.
     result = prefilter_candidate(
         candidate_id="c6",
-        jd_required_skills=["Python", "SQL", "GCP", "Docker"],
-        candidate_skills=["Python", "SQL", "GCP", "Baking"],
-        threshold=0.9,
-    )
-    assert result.passed is True
-    assert abs(result.similarity - 0.75) < 1e-6
-
-
-def test_prefilter_candidate_fails_just_below_the_fraction_boundary():
-    # Same 4 required skills, candidate matches only 2 -> 0.5 fraction, below
-    # MIN_REQUIRED_SKILLS_FRACTION even though 2 would have cleared the old
-    # fixed-count minimum.
-    result = prefilter_candidate(
-        candidate_id="c7",
         jd_required_skills=["Python", "SQL", "GCP", "Docker"],
         candidate_skills=["Python", "SQL", "Baking", "Pastry decoration"],
         threshold=0.9,
     )
-    assert result.passed is False
+    assert result.passed is True
     assert abs(result.similarity - 0.5) < 1e-6
+
+
+def test_prefilter_candidate_fails_just_below_the_fraction_boundary():
+    result = prefilter_candidate(
+        candidate_id="c7",
+        jd_required_skills=["Python", "SQL", "GCP", "Docker"],
+        candidate_skills=["Python", "Baking", "Pastry decoration", "Kitchen sanitation"],
+        threshold=0.9,
+    )
+    assert result.passed is False
+    assert abs(result.similarity - 0.25) < 1e-6
 
 
 def test_prefilter_candidate_unrelated_skills_fails():
@@ -125,11 +114,8 @@ def test_prefilter_candidates_calls_encode_exactly_once(monkeypatch):
     )
 
     assert len(encode_calls) == 1
-    # 2 required skills + c1's 1 skill + c2's 2 skills + c3's 1 placeholder skill = 6
     assert len(encode_calls[0]) == 6
     assert set(results.keys()) == {"c1", "c2", "c3"}
-    # All candidate/required vectors are identical in this fake, so every
-    # required skill "exists" for every candidate with real skills.
     assert results["c1"].passed is True
     assert results["c2"].passed is True
     assert results["c3"].passed is False

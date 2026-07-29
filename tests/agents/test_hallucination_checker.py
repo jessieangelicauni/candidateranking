@@ -78,9 +78,6 @@ def test_check_evidence_verifies_quote_despite_whitespace_differences():
 
 
 def test_check_evidence_verifies_quote_from_summary_section_not_captured_by_extractor():
-    # A quote genuinely sourced from a resume section the extractor never
-    # parses into a structured field (e.g. a summary/profile paragraph) must
-    # still verify, since it's checked against the real resume text directly.
     profile = _profile(
         raw_cv_text=(
             "Daniel Taylor\nPROFESSIONAL SUMMARY\n"
@@ -105,15 +102,54 @@ def test_check_evidence_verifies_quote_from_summary_section_not_captured_by_extr
 
 
 def test_check_evidence_flags_quote_copied_from_structured_profile_syntax():
-    # A quote drawn from the Judge prompt's "structured profile" block (Python
-    # list/dict rendering) rather than the resume text itself must still be
-    # flagged, even though the underlying skill is real and in profile.skills.
     profile = _profile(skills=["Python", "Kubernetes"])
     judge_result = JudgeResult(
         candidate_id="c1",
         tier=Tier.STRONG_FIT,
         rating=8,
         evidence=[EvidenceClaim(claim="Has Kubernetes experience", quote="skills: ['Kubernetes']")],
+    )
+
+    report = check_evidence(judge_result, profile)
+
+    assert report.all_verified is False
+
+
+def test_check_evidence_flags_quote_containing_ellipsis_even_if_fuzzy_score_would_pass():
+    profile = _profile(
+        raw_cv_text=(
+            "Daniel Taylor\nExpert in TypeScript, C#, Java with demonstrated leadership "
+            "in cross-functional teams.\nCore Competencies\nTypeScript, C#, Java, Flask"
+        ),
+    )
+    judge_result = JudgeResult(
+        candidate_id="c1",
+        tier=Tier.STRONG_FIT,
+        rating=8,
+        evidence=[
+            EvidenceClaim(
+                claim="Experience with Flask",
+                quote=(
+                    "Expert in TypeScript, C#, Java with demonstrated leadership in "
+                    "cross-functional teams. Core Competencies: ... Flask ..."
+                ),
+            )
+        ],
+    )
+
+    report = check_evidence(judge_result, profile)
+
+    assert report.all_verified is False
+    assert judge_result.evidence[0].quote in report.unverified_quotes
+
+
+def test_check_evidence_flags_quote_containing_unicode_ellipsis_character():
+    profile = _profile(raw_cv_text="Daniel Taylor\nSkills: Python, Machine Learning, Flask, SQL")
+    judge_result = JudgeResult(
+        candidate_id="c1",
+        tier=Tier.STRONG_FIT,
+        rating=8,
+        evidence=[EvidenceClaim(claim="Has several skills", quote="Skills: Python…Flask")],
     )
 
     report = check_evidence(judge_result, profile)

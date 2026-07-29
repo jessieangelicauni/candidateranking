@@ -62,8 +62,6 @@ def _fake_final_state(fake_jd: JDRequirements) -> dict:
 
 
 def _fake_final_state_two_candidates(fake_jd: JDRequirements) -> dict:
-    # Two candidates (not one) - rank stability requires at least 2
-    # candidates common to every run to compute a correlation at all.
     return {
         "jd": fake_jd,
         "dropped": [],
@@ -205,6 +203,7 @@ def test_rank_folds_in_extra_reports_alongside_fresh_run(monkeypatch, tmp_path):
     extra_report = tmp_path / "past_run.json"
     extra_report.write_text(json.dumps({
         "jd": fake_jd.model_dump(),
+        "profiles": {"candidate1": {"raw_cv_text": "x"}, "candidate2": {"raw_cv_text": "y"}},
         "dropped": [],
         "judge_results": {},
         "calibrated_results": [
@@ -224,9 +223,8 @@ def test_rank_folds_in_extra_reports_alongside_fresh_run(monkeypatch, tmp_path):
         )
 
         assert result.exit_code == 0, result.output
-        assert Path("report.json").exists()  # single run still writes report.json
+        assert Path("report.json").exists()
         content = Path("report.md").read_text(encoding="utf-8")
-        # fresh run (report.json) + the folded-in extra report = 2 reports -> stability section
         assert "## Rank Stability" in content
 
 
@@ -275,7 +273,7 @@ def test_rank_multi_run_includes_rank_stability_section(monkeypatch):
         assert result.exit_code == 0, result.output
         content = Path("report.md").read_text(encoding="utf-8")
         assert "## Rank Stability" in content
-        assert "1.000" in content  # identical rankings every run -> perfect correlation
+        assert "1.000" in content
 
 
 def test_rank_defaults_runs_to_one(monkeypatch):

@@ -1,0 +1,10 @@
+Requirements
+
+Bachelor's degree in computer science, Information Technology, Software Engineering, or a related field. 
+Fresh graduates are welcome to apply. 
+Applicants must be available for full-time employment. Undergraduate students who are still attending regular classes are not eligible. 
+Proficiency in C#/.NET and Java (mandatory). 
+Fluent in English, both written and verbal, is a must. 
+Experience with one or more frontend/backend frameworks such as Blazor, React.js, Vue.js, TypeScript, or Spring Framework is an advantage. 
+Knowledge of relational databases, particularly MySQL and Oracle Database. 
+Familiarity with Figma and the ability to collaborate with UI/UX designers to implement user interface designs.

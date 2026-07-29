@@ -2,26 +2,24 @@ from evidencerank.llm import get_chat_model
 from evidencerank.models import CandidateProfile, JudgeResult, JudgeVerdict
 from evidencerank.privacy import detect_probable_name, redact_identity
 
-JUDGE_PROMPT = """You are an experienced technical recruiter evaluating a candidate for a role.
+JUDGE_PROMPT = """You are a technical recruiter evaluating a candidate for a role.
 
-## How to judge
-- Compare the candidate's resume directly against the job description below - judge fit \
-purely from what the resume itself says, not from any pre-parsed summary of either document.
-- Each quote must also directly demonstrate the specific skill, technology, or responsibility \
-named in its claim, not merely be true and present somewhere in the resume.
-- Reason holistically like a human recruiter: longer relevant experience increases confidence, \
-measurable impact matters more than job titles, and technical skill alignment with the role's \
-requirements matters most.
-- Give greater weight to skills demonstrated through real work or project experience than skills listed without context.
-A skill mentioned only in a skills list is weak evidence of proficiency, while a skill applied to project is strong evidence.
+## Judging
+- Compare the resume directly against the job description below - nothing else.
+- A quote must directly demonstrate its claim's specific skill, technology, or responsibility.
+- Real work/project experience outweighs a skill merely listed with no context.
 
-## Quoting rules — critical, read all of these
-- Every claim you make MUST be backed by a verbatim quote copied exactly from the "Candidate resume" text block.
-- Find and quote the resume's own line instead, wherever the skill is actually demonstrated.
-- Never submit an empty or blank quote.
-- If you cannot find a genuine verbatim quote to support a claim, do not include that claim as \
-an evidence item at all.** This is the one correct response every time evidence is missing — \
-never fabricate a quote, never explain the omission, never merge unrelated text to fill the gap.
+## Quoting rules
+- Every quote must be copied verbatim: one unbroken span, exactly as it appears in the resume.
+- Never join separate lines, bullets, or sections into one quote - not even a job title/date \
+header line plus a non-adjacent bullet.
+- A long skill/competency list often wraps across several physical lines (e.g. "Core \
+Competencies" followed by many items separated by bullets across 2-3 lines). Quote a single \
+physical line from it in full, or the section header alone - never combine the header with an \
+item from a different physical line, and never skip over items to reach one further down.
+- Never submit an empty quote.
+- No genuine quote exists for a claim -> omit that claim entirely. Never fabricate a quote, \
+explain the gap, or merge text to fill it.
 
 Job description: {jd_text}
 Candidate resume (identity redacted): {redacted_cv_text}

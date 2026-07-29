@@ -34,11 +34,38 @@ class ProjectEntry(BaseModel):
 
 class JDRequirements(BaseModel):
     title: str
-    required_skills: list[str]
-    nice_to_have_skills: list[str] = Field(default_factory=list)
+    required_skills: list[str] = Field(
+        description=(
+            "Every mandatory skill, technology, or technique the JD names - from bulleted "
+            "lists AND from prose (e.g. 'developing backend applications' names Backend "
+            "Development as a skill just as much as a bullet would). Exhaustive, not a sample."
+        )
+    )
+    nice_to_have_skills: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Every preferred/bonus skill, technology, or technique the JD names. Skills only - "
+            "never degrees or generic experience statements, those belong in education instead."
+        ),
+    )
     min_experience_years: int = 0
-    education: str = ""
-    responsibilities: list[str] = Field(default_factory=list)
+    education: str = Field(
+        default="",
+        description=(
+            "The degree/field-of-study requirement as one string, copied close to as stated "
+            "(e.g. \"Bachelor's or Master's degree in Computer Science, Data Science, "
+            "Engineering, or a related field\"). Must be non-empty whenever the JD mentions a "
+            "degree anywhere, even under a heading like 'Preferred Qualifications' that isn't "
+            "literally labeled 'Education'. Never split into multiple degree/field combinations."
+        ),
+    )
+    responsibilities: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Every distinct duty the JD describes, one per list item - including duties stated "
+            "in prose without a 'Responsibilities' heading."
+        ),
+    )
 
 
 class ExtractedProfileFields(BaseModel):

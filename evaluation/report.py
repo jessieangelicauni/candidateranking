@@ -176,10 +176,56 @@ def compute_pipeline_stats(report_path: str | Path) -> dict:
     }
 
 
+def _format_count(value: float) -> str:
+    return f"{value:.0f}" if value == int(value) else f"{value:.1f}"
+
+
+_STATS_COLUMNS = [
+    ("Total candidates", "total_candidates", _format_count),
+    ("Passed pre-filter", "passed_prefilter", _format_count),
+    ("Dropped by pre-filter", "dropped_prefilter", _format_count),
+    ("Evaluated by Judge", "evaluated_by_judge", _format_count),
+    ("Hallucination Rate", "hallucination_rate", lambda v: f"{v:.1%}"),
+    ("Evidence Relevancy", "mean_evidence_relevancy", lambda v: f"{v:.3f}"),
+]
+
+
+def _mean_of_stats(per_report_stats: list[dict]) -> dict:
+    return {
+        key: sum(stats[key] for stats in per_report_stats) / len(per_report_stats)
+        for key in per_report_stats[0]
+    }
+
+
+def compute_mean_pipeline_stats(report_paths: list[str | Path]) -> dict:
+    return _mean_of_stats([compute_pipeline_stats(path) for path in report_paths])
+
+
+def _stats_row(label: str, stats: dict) -> str:
+    values = " | ".join(formatter(stats[key]) for _, key, formatter in _STATS_COLUMNS)
+    return f"| {_escape_table_cell(label)} | {values} |"
+
+
+def _build_pipeline_stats_table(report_paths: list[str | Path]) -> str:
+    if len(report_paths) == 1:
+        stats = compute_pipeline_stats(report_paths[0])
+        lines = ["| Metric | Value |", "|---|---|"]
+        lines += [f"| {label} | {formatter(stats[key])} |" for label, key, formatter in _STATS_COLUMNS]
+        return "\n".join(lines)
+
+    per_report_stats = [compute_pipeline_stats(path) for path in report_paths]
+    header = "| Run | " + " | ".join(label for label, _, _ in _STATS_COLUMNS) + " |"
+    separator = "|" + "---|" * (len(_STATS_COLUMNS) + 1)
+    lines = [header, separator]
+    for path, stats in zip(report_paths, per_report_stats):
+        lines.append(_stats_row(str(path), stats))
+    lines.append(_stats_row("**Mean**", _mean_of_stats(per_report_stats)))
+    return "\n".join(lines)
+
+
 def build_markdown_report(report_paths: list[str | Path]) -> str:
     primary = report_paths[0]
     data = json.loads(Path(primary).read_text(encoding="utf-8"))
-    stats = compute_pipeline_stats(primary)
 
     lines = [
         "# Candidate Ranking Report",
@@ -198,14 +244,7 @@ def build_markdown_report(report_paths: list[str | Path]) -> str:
         "",
         "## Pipeline Stats",
         "",
-        "| Metric | Value |",
-        "|---|---|",
-        f"| Total candidates | {stats['total_candidates']} |",
-        f"| Passed pre-filter | {stats['passed_prefilter']} |",
-        f"| Dropped by pre-filter | {stats['dropped_prefilter']} |",
-        f"| Evaluated by Judge | {stats['evaluated_by_judge']} |",
-        f"| Hallucination Rate | {stats['hallucination_rate']:.1%} |",
-        f"| Evidence Relevancy | {stats['mean_evidence_relevancy']:.3f} |",
+        _build_pipeline_stats_table(report_paths),
     ]
 
     stage_timings = data.get("stage_timings") or {}
