@@ -382,6 +382,24 @@ def test_build_markdown_report_shows_removed_count_for_flagged_candidate(tmp_pat
     assert "| 2 removed |" in markdown
 
 
+def test_build_markdown_report_shows_dash_when_hallucination_report_has_no_unverified_quotes(tmp_path):
+    report_path = tmp_path / "report.json"
+    _write_report(
+        report_path,
+        profiles={"strong": {"raw_cv_text": "strong cv"}},
+        calibrated_results=[
+            {"candidate_id": "strong", "final_rank": 1, "tier": "Strong Fit", "rating": 9, "calibration_notes": ""}
+        ],
+        hallucination_reports={
+            "strong": {"candidate_id": "strong", "unverified_quotes": []},
+        },
+    )
+
+    markdown = build_markdown_report([report_path])
+
+    assert "| — |" in markdown
+
+
 def test_build_markdown_report_shows_dash_when_no_hallucination_report_present(tmp_path):
     report_path = tmp_path / "report.json"
     _write_report(
