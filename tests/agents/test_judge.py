@@ -190,7 +190,7 @@ def test_judge_candidate_prompt_forbids_quoting_full_structured_lists(monkeypatc
 
     prompt_sent = fake_structured_model.invoke.call_args[0][0]
     assert "no matter how long or short the list is" in prompt_sent
-    assert "neither is quoting the skills line itself verbatim" in prompt_sent
+    assert "quoting the skills line itself verbatim" in prompt_sent
     assert "however many items it contains" in prompt_sent
 
 
@@ -313,6 +313,38 @@ def test_judge_candidate_prompt_forbids_quoting_job_requirements(monkeypatch):
     assert "it is the role's requirements, not the candidate's resume" in prompt_sent
 
 
+def test_judge_candidate_prompt_forbids_explanation_in_place_of_missing_quote(monkeypatch):
+    # Observed on a real resume (Michael Burton, pure DevOps/SRE work with zero
+    # model-training content): instead of omitting a "model training and
+    # evaluation" claim as instructed, the Judge submitted an evidence item
+    # whose quote was an explanation of why no quote exists ("not directly
+    # quoted as the resume does not explicitly mention model training or
+    # evaluation tasks") rather than a genuine resume excerpt. The
+    # hallucination checker caught and stripped it, but the prompt never
+    # explicitly named this failure mode - it only said to omit the claim,
+    # not that explaining the omission counts as violating that instruction.
+    verdict = JudgeVerdict(
+        tier=Tier.STRONG_FIT,
+        rating=8,
+        evidence=[EvidenceClaim(claim="Has Python experience", quote="5 years of Python experience")],
+    )
+    fake_structured_model = MagicMock()
+    fake_structured_model.invoke.return_value = verdict
+    fake_chat_model = MagicMock()
+    fake_chat_model.with_structured_output.return_value = fake_structured_model
+    monkeypatch.setattr(
+        "evidencerank.agents.judge.get_chat_model",
+        lambda stage: fake_chat_model,
+    )
+    jd = JDRequirements(title="ML Engineer", required_skills=["Python"])
+
+    judge_candidate(jd, _make_profile())
+
+    prompt_sent = fake_structured_model.invoke.call_args[0][0]
+    assert "Never write an explanation of why no quote exists AS IF it were the quote itself" in prompt_sent
+    assert "not directly quoted as the resume does not explicitly mention model training" in prompt_sent
+
+
 def test_judge_candidate_prompt_requires_contiguous_non_empty_quotes(monkeypatch):
     verdict = JudgeVerdict(
         tier=Tier.STRONG_FIT,
@@ -357,6 +389,38 @@ def test_judge_candidate_prompt_requires_claim_relevant_quotes(monkeypatch):
     prompt_sent = fake_structured_model.invoke.call_args[0][0]
     assert "directly demonstrate the specific skill, technology, or responsibility" in prompt_sent
     assert "results-driven engineer with 4+ years of experience" in prompt_sent
+
+
+def test_judge_candidate_prompt_requires_relevant_quotes_for_negative_claims(monkeypatch):
+    # Observed on real resumes (GEval EvidenceRelevancy flagged both): a claim about
+    # insufficient ML experience was backed by a quote about Rust experience, and a
+    # claim about model training/evaluation was backed by a quote about an unrelated
+    # backup/ELK-Stack task that merely happened to contain a percentage figure. The
+    # existing claim-relevance rule only had an example for positive ML claims: it
+    # needs one for negative/gap claims and for "picked because it has a number in
+    # it" quotes too.
+    verdict = JudgeVerdict(
+        tier=Tier.STRONG_FIT,
+        rating=8,
+        evidence=[EvidenceClaim(claim="Has Python experience", quote="5 years of Python experience")],
+    )
+    fake_structured_model = MagicMock()
+    fake_structured_model.invoke.return_value = verdict
+    fake_chat_model = MagicMock()
+    fake_chat_model.with_structured_output.return_value = fake_structured_model
+    monkeypatch.setattr(
+        "evidencerank.agents.judge.get_chat_model",
+        lambda stage: fake_chat_model,
+    )
+    jd = JDRequirements(title="ML Engineer", required_skills=["Python"])
+
+    judge_candidate(jd, _make_profile())
+
+    prompt_sent = fake_structured_model.invoke.call_args[0][0]
+    assert "applies just as much to negative or gap claims" in prompt_sent
+    assert "Junior engineer with 1 years working with Rust" in prompt_sent
+    assert "Built automated backup solution using ELK Stack, ensuring 1000% data protection" in prompt_sent
+    assert "leave that claim out of the evidence list entirely" in prompt_sent
 
 
 def test_judge_candidate_prompt_weighs_applied_experience_over_skill_list_mentions(monkeypatch):

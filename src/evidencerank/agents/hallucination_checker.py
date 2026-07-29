@@ -18,16 +18,10 @@ def check_evidence(
     profile: CandidateProfile,
     threshold: float = DEFAULT_THRESHOLD,
 ) -> HallucinationReport:
-    """Verify each Judge quote against the candidate's actual resume text.
-
-    Uses profile.raw_cv_text, not the CV-extractor's parsed fields - a genuine,
-    verbatim quote is only ever genuine because it's copied from the resume
-    itself, so raw_cv_text is the only source that can verify a quote from ANY
-    resume section regardless of how (or whether) the extractor captured it.
-    Known trade-off: if the extractor mis-transcribes something and the Judge
-    echoes that error into a quote, it won't be caught here - but the Judge is
-    prompted to quote only from the resume text, not the extracted fields, so
-    this only matters if the Judge disobeys that instruction.
+    """Verify every Judge quote against profile.raw_cv_text, the single source of truth. 
+    A quote is valid only if it appears verbatim in the original resume. 
+    Ignore parsed or extracted CV fields, as they may omit or alter content. 
+    If the Judge quotes text containing extraction errors instead of the original resume, mark it as invalid.
     """
     normalized_cv_text = _normalize_whitespace(profile.raw_cv_text)
     unverified = []

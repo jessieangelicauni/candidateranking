@@ -22,21 +22,12 @@ def cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
 def _required_skill_coverage(
     req_vecs: np.ndarray, skill_vecs: np.ndarray, threshold: float
 ) -> tuple[int, float]:
-    """Count how many required-skill vectors have a matching candidate skill.
+    """Task: Count how many required skills are matched by the candidate. 
+    A required skill is considered matched if at least one candidate skill has a cosine similarity greater than the threshold. 
+    Return both the matched count and the match fraction.
 
-    A required skill "exists" for a candidate if at least one of the candidate's
-    individual skills has cosine similarity >= threshold to it (i.e. per-skill
-    existence, not a single whole-list similarity). Returns (matched_count, fraction).
-
-    Known limitation: this embedding model's short-phrase similarity is noisy at
-    the individual-skill level, so a candidate whose skills are genuinely adjacent
-    to a requirement but named differently (e.g. "LangChain"/"MLOps" vs. the
-    literal phrase "Machine Learning") can score below threshold on that
-    requirement even though a human recruiter would count it as relevant. This
-    was validated against a real candidate pool: it correctly excludes false
-    positives from generically tech-adjacent (non-ML) candidates, but can also
-    exclude some genuinely-adjacent candidates the previous whole-list-average
-    approach used to admit.
+    Limitation: Short-phrase embeddings can miss semantically related skills expressed with different terminology (e.g., "LangChain" or "MLOps" vs. "Machine Learning"), so some relevant matches may fall below the threshold. 
+    This approach prioritizes reducing false positives over maximizing recall.
     """
     matched = sum(
         max(cosine_similarity(req_vec, skill_vec) for skill_vec in skill_vecs) >= threshold
@@ -84,10 +75,6 @@ def prefilter_candidates(
     embedder = _get_embedder()
     candidate_ids = list(candidate_skills.keys())
 
-    # One combined encode() call: JD requirements first, then each candidate's
-    # skills back-to-back (falling back to a single placeholder skill text for
-    # candidates with no extracted skills, so no candidate is ever an empty
-    # span and encode() never receives an empty list overall).
     all_texts = list(jd_required_skills)
     skill_spans: dict[str, tuple[int, int]] = {}
     for candidate_id in candidate_ids:

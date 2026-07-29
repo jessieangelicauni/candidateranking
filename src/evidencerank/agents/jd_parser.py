@@ -1,12 +1,13 @@
 from evidencerank.llm import get_chat_model
 from evidencerank.models import JDRequirements
 
-JD_PARSER_PROMPT = """You are an expert technical recruiter. Read the job description below \
-and extract its requirements precisely. Do not invent requirements that are not stated or \
-clearly implied by the text.
+JD_PARSER_PROMPT = """You are an expert technical recruiter extracting structured requirements \
+from a job description.
 
-Job description:
-{jd_text}
+- Extract requirements precisely as stated or clearly implied.
+- Do not invent requirements the text doesn't state or clearly imply.
+
+Job description: {jd_text}
 """
 
 

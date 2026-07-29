@@ -5,24 +5,14 @@ from evidencerank.cache import compute_cache_key, load_cached_json, save_cached_
 from evidencerank.llm import get_chat_model, resolve_model_name
 from evidencerank.models import CandidateProfile, ExtractedProfileFields
 
-CV_EXTRACTOR_PROMPT = """You are an expert technical recruiter. Read the resume below and \
-extract the candidate's contact info, skills, work history, education, and projects exactly \
-as stated. Do not infer skills or experience that are not explicitly present in the text.
+CV_EXTRACTOR_PROMPT = """You are an expert technical recruiter extracting structured data from a resume.
 
-A resume's work history is not always under a heading literally called "Work History" or \
-"Experience" - treat any section describing paid work, internships, or contract roles as work \
-history regardless of its heading wording (e.g. "Employment History", "Career History", or a \
-combined heading like "Internships / Experience"), and extract every entry in it.
+- Extract the candidate's profile, skills, work history, education, and projects exactly as \
+stated. Do not infer skills or experience that are not explicitly present in the text.
+- A resume's work history is not always under a heading literally called "Work History" or \
+"Experience" - treat any section describing paid work, internships, or contract roles as work history
 
-When extracting a degree name for the education field, preserve the resume's exact wording and \
-abbreviations verbatim - never expand or normalize an abbreviation into a different phrasing \
-(e.g. "M.Sc." must stay "M.Sc.", not become "Master's Degree"; "B.Sc." must stay "B.Sc.", not \
-become "Bachelor's Degree"). If a degree's field of study or focus appears on a separate line or \
-in parentheses near the degree line, copy it in the same order and punctuation the resume uses - \
-do not rewrite it into a new sentence of your own.
-
-Resume:
-{cv_text}
+Resume: {cv_text}
 """
 
 DEFAULT_CACHE_DIR = Path(".cache/evidencerank/extract_profiles")

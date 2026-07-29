@@ -2,77 +2,28 @@ from evidencerank.llm import get_chat_model
 from evidencerank.models import CandidateProfile, JDRequirements, JudgeResult, JudgeVerdict
 from evidencerank.privacy import detect_probable_name, redact_identity
 
-JUDGE_PROMPT = """You are an experienced technical recruiter evaluating a candidate for a role. \
-Reason holistically like a human recruiter: longer relevant experience increases confidence, \
+JUDGE_PROMPT = """You are an experienced technical recruiter evaluating a candidate for a role.
+
+## How to judge
+- Each quote must also directly demonstrate the specific skill, technology, or responsibility \
+named in its claim, not merely be true and present somewhere in the resume. 
+- Reason holistically like a human recruiter: longer relevant experience increases confidence, \
 measurable impact matters more than job titles, and technical skill alignment with the role's \
-requirements matters most. Give your own holistic judgment — do not compute or describe a \
-numeric formula.
+requirements matters most. 
+- Give greater weight to skills demonstrated through real work or project experience than skills listed without context. 
+A skill mentioned only in a skills list is weak evidence of proficiency, while a skill applied to project is strong evidence. 
 
-Every claim you make MUST be backed by a verbatim quote copied exactly, character-for-character, \
-from the "Candidate resume" text block below — and ONLY from that block. Never quote the \
-"Candidate structured profile" section (skills/work_history/education/projects) in ANY form — \
-this applies no matter how long or short the list is, or how it's introduced (e.g. "skills:", \
-"work_history:"). That section is paraphrased summary data for your background context only. \
-work_history/education/projects are rendered in Python list/dict syntax; skills is a plain \
-comma-separated line — but being from the structured-profile block makes it off-limits as a \
-quote regardless of which of these formats it's in, even when its wording happens to look \
-identical to a line in the resume. For example, quoting "skills: ['TensorFlow']" (Python list \
-syntax) is NOT allowed, and neither is quoting the skills line itself verbatim (e.g. "SQL, \
-MATLAB, TensorFlow, ..."), however many items it contains — both are sourced from the structured \
-profile, not the resume text block. Find and quote the resume's own skills line (or wherever the \
-skill is actually demonstrated in the resume text) instead.
+## Quoting rules — critical, read all of these
+- Every claim you make MUST be backed by a verbatim quote copied exactly from the "Candidate resume" text block.
+- Find and quote the resume's own line instead, wherever the skill is actually demonstrated.
+- Never submit an empty or blank quote.
+- If you cannot find a genuine verbatim quote to support a claim, do not include that claim as \
+an evidence item at all.** This is the one correct response every time evidence is missing — \
+never fabricate a quote, never explain the omission, never merge unrelated text to fill the gap.
 
-This also applies to structured-profile fields that read as ordinary prose rather than a \
-list, like education.degree — that string may be the CV-extractor's own paraphrase of the \
-resume's actual wording (e.g. normalizing "M.Sc." to "Master's Degree, Computer Science") and is \
-not guaranteed to match the resume text. Never quote an education, work_history, or projects \
-field directly, even when it looks like a normal sentence — find and quote the equivalent line \
-from the resume text block instead. This includes combining two or more separate structured \
-fields into a new sentence of your own (e.g. writing "B.Sc. in Artificial Intelligence, TU Delft \
-2019" by joining education.degree, education.institution, and education.year together) — that \
-combined sentence is not resume text either, even if every field in it is individually real, and \
-even if the resume happens to contain the same information laid out differently (e.g. \
-institution and year on one line, degree on the next). Quote the resume's own line(s) instead of \
-assembling one yourself.
-
-Never quote the "Job requirements" block below, under any circumstances — it is the role's \
-requirements, not the candidate's resume, so it can never be evidence that a candidate has a \
-skill. For example, if "Machine Learning" is listed as a required skill and the candidate's \
-resume never mentions it, do not create an evidence item quoting "Machine Learning" (or any \
-other job-requirements wording) — there is no genuine quote to give, so do not include that \
-claim at all.
-
-Every quote must be a single, continuous span of text copied from ONE location in the resume — \
-never join two or more separate lines, bullets, or sections together into one quote, even if \
-they appear close together (e.g. immediately before and after an intervening line). If the two \
-pieces of evidence you want aren't part of the same unbroken span of text, use two separate \
-evidence items instead of merging them into one quote.
-
-Never submit an empty or blank quote. If you cannot find a genuine verbatim quote to support a \
-claim, do not include that claim as an evidence item at all.
-
-Each quote must also directly demonstrate the specific skill, technology, or responsibility \
-named in its claim, not merely be true and present somewhere in the resume. For example, if the \
-claim is "candidate has machine learning experience," a quote that only establishes years of \
-experience in general (e.g. "results-driven engineer with 4+ years of experience") is NOT \
-sufficient evidence — the quote must itself name machine learning, a related framework, or a \
-related task.
-
-When a required skill or technology appears only as a bare item in a skills list, with no \
-accompanying description of it being applied, treat that as weak evidence of genuine \
-proficiency. A required skill demonstrated within a work history entry or project description — \
-actually used to build, train, deploy, analyze, or ship something — counts far more heavily \
-toward the rating than the same skill merely being listed. Score a candidate lower on a \
-requirement that only shows up as a skills-list item and never appears in the context of real \
-applied work.
-
-Job requirements:
-{jd_requirements}
-
-Candidate resume (identity redacted):
-{redacted_cv_text}
-
-Candidate structured profile (background context only — do not quote from this section):
+Job requirements: {jd_requirements}
+Candidate resume (identity redacted): {redacted_cv_text}
+Candidate structured profile:
 skills: {skills}
 work_history: {work_history}
 education: {education}
