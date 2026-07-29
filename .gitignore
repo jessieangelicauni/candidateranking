@@ -4,6 +4,7 @@ __pycache__/
 .pytest_cache/
 report.json
 report.md
+run*.json
 *.egg-info/
 .env
 .claude/

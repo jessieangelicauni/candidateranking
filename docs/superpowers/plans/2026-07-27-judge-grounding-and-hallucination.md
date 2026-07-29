@@ -1020,7 +1020,7 @@ Expected: `qwen2.5:7b-instruct` and `qwen2.5:14b-instruct` are present. If `olla
 Run:
 ```bash
 uv run evidencerank \
-  --jd machine_learning_engineer.txt \
+  --jd ai_data_engineer.txt \
   --resumes-dir resumes \
   --out-json report.json \
   --out-md report.md \

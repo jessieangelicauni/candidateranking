@@ -177,7 +177,7 @@ def test_cached_extract_cvs_all_misses_batches_and_caches_each(tmp_path, monkeyp
     extracted_c1 = ExtractedProfileFields(contact=ContactInfo(name="Jane Doe"), skills=["Python"])
     extracted_c2 = ExtractedProfileFields(contact=ContactInfo(name="John Smith"), skills=["Go"])
     fake_structured_model = MagicMock()
-    fake_structured_model.batch.return_value = [extracted_c1, extracted_c2]
+    fake_structured_model.batch_as_completed.return_value = [(0, extracted_c1), (1, extracted_c2)]
     fake_chat_model = MagicMock()
     fake_chat_model.with_structured_output.return_value = fake_structured_model
     monkeypatch.setattr(
@@ -188,7 +188,7 @@ def test_cached_extract_cvs_all_misses_batches_and_caches_each(tmp_path, monkeyp
 
     assert profiles["c1"].skills == ["Python"]
     assert profiles["c2"].skills == ["Go"]
-    call_args, call_kwargs = fake_structured_model.batch.call_args
+    call_args, call_kwargs = fake_structured_model.batch_as_completed.call_args
     assert len(call_args[0]) == 2
     assert call_kwargs["config"] == {"max_concurrency": 4}
 
@@ -217,7 +217,7 @@ def test_cached_extract_cvs_mixed_hits_and_misses_only_batches_misses(tmp_path, 
 
     extracted_c2 = ExtractedProfileFields(contact=ContactInfo(name="John Smith"), skills=["Go"])
     fake_structured_model = MagicMock()
-    fake_structured_model.batch.return_value = [extracted_c2]
+    fake_structured_model.batch_as_completed.return_value = [(0, extracted_c2)]
     fake_chat_model = MagicMock()
     fake_chat_model.with_structured_output.return_value = fake_structured_model
     monkeypatch.setattr(
@@ -228,7 +228,7 @@ def test_cached_extract_cvs_mixed_hits_and_misses_only_batches_misses(tmp_path, 
 
     assert profiles["c1"].skills == ["Python"]
     assert profiles["c2"].skills == ["Go"]
-    call_args, _ = fake_structured_model.batch.call_args
+    call_args, _ = fake_structured_model.batch_as_completed.call_args
     prompts_sent = call_args[0]
     assert len(prompts_sent) == 1
     assert candidates["c2"] in prompts_sent[0]
@@ -251,7 +251,7 @@ def test_cached_extract_cvs_preserves_input_order_regardless_of_cache_state(tmp_
 
     extracted_c1 = ExtractedProfileFields(contact=ContactInfo(name="John Smith"), skills=["Go"])
     fake_structured_model = MagicMock()
-    fake_structured_model.batch.return_value = [extracted_c1]
+    fake_structured_model.batch_as_completed.return_value = [(0, extracted_c1)]
     fake_chat_model = MagicMock()
     fake_chat_model.with_structured_output.return_value = fake_structured_model
     monkeypatch.setattr(
@@ -261,3 +261,45 @@ def test_cached_extract_cvs_preserves_input_order_regardless_of_cache_state(tmp_
     profiles = cached_extract_cvs(candidates, max_concurrency=4, cache_dir=tmp_path)
 
     assert list(profiles.keys()) == ["c1", "c2"]
+
+
+def test_cached_extract_cvs_caches_each_result_as_it_completes_not_after_whole_batch(tmp_path, monkeypatch):
+    # Regression test: previously results were only written to cache after
+    # the *entire* batch finished, so interrupting a run (crash, Ctrl+C,
+    # restarting the LLM server) lost every already-completed candidate, not
+    # just the ones still in flight. batch_as_completed() yields results as
+    # they finish, so each should be cached immediately - verified here by
+    # raising on the second result and confirming the first was still cached.
+    candidates = {
+        "c1": "Jane Doe resume text...",
+        "c2": "John Smith resume text...",
+    }
+    extracted_c1 = ExtractedProfileFields(contact=ContactInfo(name="Jane Doe"), skills=["Python"])
+
+    def fake_batch_as_completed(prompts, config):
+        yield (0, extracted_c1)
+        raise RuntimeError("simulated interruption before c2 completes")
+
+    fake_structured_model = MagicMock()
+    fake_structured_model.batch_as_completed.side_effect = fake_batch_as_completed
+    fake_chat_model = MagicMock()
+    fake_chat_model.with_structured_output.return_value = fake_structured_model
+    monkeypatch.setattr(
+        "evidencerank.agents.cv_extractor.get_chat_model", lambda stage: fake_chat_model
+    )
+
+    try:
+        cached_extract_cvs(candidates, max_concurrency=4, cache_dir=tmp_path)
+    except RuntimeError:
+        pass
+
+    key_c1 = compute_cache_key(
+        candidates["c1"], CV_EXTRACTOR_PROMPT, resolve_model_name("cv_extractor"),
+        json.dumps(ExtractedProfileFields.model_json_schema(), sort_keys=True),
+    )
+    key_c2 = compute_cache_key(
+        candidates["c2"], CV_EXTRACTOR_PROMPT, resolve_model_name("cv_extractor"),
+        json.dumps(ExtractedProfileFields.model_json_schema(), sort_keys=True),
+    )
+    assert (tmp_path / f"{key_c1}.json").exists()
+    assert not (tmp_path / f"{key_c2}.json").exists()

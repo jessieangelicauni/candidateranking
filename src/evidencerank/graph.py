@@ -25,6 +25,7 @@ from evidencerank.models import (
 
 class PipelineState(TypedDict, total=False):
     jd: JDRequirements
+    raw_jd_text: str
     raw_resumes: dict[str, str]
     profiles: dict[str, CandidateProfile]
     prefilter_results: dict[str, PrefilterResult]
@@ -47,7 +48,7 @@ def extract_profiles_node(state: PipelineState) -> dict:
 
 def prefilter_node(state: PipelineState) -> dict:
     click.echo("Running stage: prefilter")
-    threshold = state.get("prefilter_threshold", 0.7)
+    threshold = state.get("prefilter_threshold", 0.8)
     candidate_skills = {
         candidate_id: profile.skills for candidate_id, profile in state["profiles"].items()
     }
@@ -68,7 +69,7 @@ def judge_node(state: PipelineState) -> dict:
         for candidate_id, result in state["prefilter_results"].items()
         if result.passed
     ]
-    judge_results = judge_candidates(state["jd"], passing_profiles, max_concurrency=max_concurrency)
+    judge_results = judge_candidates(state["raw_jd_text"], passing_profiles, max_concurrency=max_concurrency)
     return {"judge_results": judge_results}
 
 

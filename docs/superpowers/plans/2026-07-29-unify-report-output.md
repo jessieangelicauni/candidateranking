@@ -1461,7 +1461,7 @@ Expected: no output. (The excluded paths are historical spec/plan docs from befo
 Run against a small resumes subset (a full run against every resume in `resumes/` would take a long time — point `--resumes-dir` at a folder with 2-3 PDFs copied in for this check):
 
 ```bash
-uv run evidencerank --jd machine_learning_engineer.txt --resumes-dir <small-subset-dir> --llm-concurrency 3
+uv run evidencerank --jd ai_data_engineer.txt --resumes-dir <small-subset-dir> --llm-concurrency 3
 ```
 
 Expected: exits 0, writes `report.json` and `report.md` only (no `evaluation-metric.md`). Open `report.md` and confirm it has `## Rankings` (with a populated table), `## Pipeline Stats`, and `## Stage Timings` sections, in that order.

@@ -1065,5 +1065,5 @@ Expected: no output. (The excluded files are: the three historical spec docs, wh
 
 - [ ] **Step 3: Smoke-test the CLI end-to-end against real resumes (manual, requires `ollama serve` running)**
 
-Run: `uv run evidencerank --jd machine_learning_engineer.txt --resumes-dir resumes --llm-concurrency 4`
+Run: `uv run evidencerank --jd ai_data_engineer.txt --resumes-dir resumes --llm-concurrency 4`
 Expected: exits 0, writes `report.json`, `report.md`, and `evaluation-metric.md`. Open `evaluation-metric.md` and confirm it has "Pipeline Stats" (and "Stage Timings", and "Rank Stability" if you ran `evidencerank-rank-stability` instead) but no "GEval Metrics" section.

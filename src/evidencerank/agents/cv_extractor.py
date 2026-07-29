@@ -78,8 +78,8 @@ def cached_extract_cvs(
     if misses:
         model = get_chat_model("cv_extractor").with_structured_output(ExtractedProfileFields)
         prompts = [_build_cv_extractor_prompt(cv_text) for _, cv_text, _ in misses]
-        fields_list = model.batch(prompts, config={"max_concurrency": max_concurrency})
-        for (candidate_id, cv_text, key), fields in zip(misses, fields_list):
+        for i, fields in model.batch_as_completed(prompts, config={"max_concurrency": max_concurrency}):
+            candidate_id, cv_text, key = misses[i]
             profile = CandidateProfile(
                 candidate_id=candidate_id, raw_cv_text=cv_text, **fields.model_dump()
             )

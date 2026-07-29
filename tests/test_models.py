@@ -89,7 +89,7 @@ def test_calibration_output_wraps_list():
 
 
 def test_prefilter_result_pass_flag():
-    result = PrefilterResult(candidate_id="c1", similarity=0.72, passed=True)
+    result = PrefilterResult(candidate_id="c1", similarity=0.8, passed=True)
     assert result.passed is True
 
 

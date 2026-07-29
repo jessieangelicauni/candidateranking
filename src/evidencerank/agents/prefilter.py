@@ -3,7 +3,7 @@ from sentence_transformers import SentenceTransformer
 
 from evidencerank.models import PrefilterResult
 
-MIN_REQUIRED_SKILLS_MATCHED = 2
+MIN_REQUIRED_SKILLS_FRACTION = 0.5
 
 _embedder: SentenceTransformer | None = None
 
@@ -40,7 +40,7 @@ def prefilter_candidate(
     candidate_id: str,
     jd_required_skills: list[str],
     candidate_skills: list[str],
-    threshold: float = 0.7,
+    threshold: float = 0.9,
 ) -> PrefilterResult:
     if not jd_required_skills:
         return PrefilterResult(candidate_id=candidate_id, similarity=1.0, passed=True)
@@ -57,14 +57,14 @@ def prefilter_candidate(
     return PrefilterResult(
         candidate_id=candidate_id,
         similarity=fraction,
-        passed=matched >= min(MIN_REQUIRED_SKILLS_MATCHED, len(jd_required_skills)),
+        passed=fraction >= MIN_REQUIRED_SKILLS_FRACTION,
     )
 
 
 def prefilter_candidates(
     jd_required_skills: list[str],
     candidate_skills: dict[str, list[str]],
-    threshold: float = 0.7,
+    threshold: float = 0.8,
 ) -> dict[str, PrefilterResult]:
     if not jd_required_skills:
         return {
@@ -98,6 +98,6 @@ def prefilter_candidates(
         results[candidate_id] = PrefilterResult(
             candidate_id=candidate_id,
             similarity=fraction,
-            passed=matched >= min(MIN_REQUIRED_SKILLS_MATCHED, n_required),
+            passed=fraction >= MIN_REQUIRED_SKILLS_FRACTION,
         )
     return results

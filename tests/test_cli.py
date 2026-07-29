@@ -5,7 +5,7 @@ from unittest.mock import MagicMock
 from click.testing import CliRunner
 from fpdf import FPDF
 
-from evidencerank.cli import rank, rank_stability, report
+from evidencerank.cli import cli, rank
 from evidencerank.models import CalibratedResult, JDRequirements, Tier
 
 
@@ -40,6 +40,12 @@ def _make_pdf(path: Path, text: str) -> None:
     pdf.output(str(path))
 
 
+def _write_jd_and_resume():
+    Path("jd.txt").write_text("Machine Learning Engineer\nPython required", encoding="utf-8")
+    Path("resumes").mkdir()
+    _make_pdf(Path("resumes/candidate1.pdf"), "Candidate One\nPython, PyTorch")
+
+
 def _fake_final_state(fake_jd: JDRequirements) -> dict:
     return {
         "jd": fake_jd,
@@ -55,144 +61,8 @@ def _fake_final_state(fake_jd: JDRequirements) -> dict:
     }
 
 
-def test_rank_command_writes_json_and_markdown_reports(monkeypatch):
-    fake_jd = JDRequirements(title="ML Engineer", required_skills=["Python"])
-    monkeypatch.setattr("evidencerank.cli.parse_jd", lambda jd_text: fake_jd)
-
-    fake_graph = MagicMock()
-    fake_graph.invoke.return_value = _fake_final_state(fake_jd)
-    monkeypatch.setattr("evidencerank.cli.build_graph", lambda: fake_graph)
-
-    runner = CliRunner()
-    with runner.isolated_filesystem():
-        Path("jd.txt").write_text("Machine Learning Engineer\nPython required", encoding="utf-8")
-        Path("resumes").mkdir()
-        _make_pdf(Path("resumes/candidate1.pdf"), "Candidate One\nPython, PyTorch")
-
-        result = runner.invoke(rank, ["--jd", "jd.txt", "--resumes-dir", "resumes"])
-
-        assert result.exit_code == 0, result.output
-        assert Path("report.json").exists()
-        assert Path("report.md").exists()
-        data = json.loads(Path("report.json").read_text(encoding="utf-8"))
-        assert data["calibrated_results"][0]["candidate_id"] == "candidate1"
-        content = Path("report.md").read_text(encoding="utf-8")
-        assert "## Rankings" in content
-        assert "candidate1" in content
-
-    invoked_state = fake_graph.invoke.call_args[0][0]
-    assert "candidate1" in invoked_state["raw_resumes"]
-    assert invoked_state["prefilter_threshold"] == 0.7
-    assert invoked_state["hallucination_threshold"] == 85.0
-
-
-def test_rank_command_report_md_includes_pipeline_stats(monkeypatch):
-    fake_jd = JDRequirements(title="ML Engineer", required_skills=["Python"])
-    monkeypatch.setattr("evidencerank.cli.parse_jd", lambda jd_text: fake_jd)
-
-    fake_graph = MagicMock()
-    fake_graph.invoke.return_value = _fake_final_state(fake_jd)
-    monkeypatch.setattr("evidencerank.cli.build_graph", lambda: fake_graph)
-
-    runner = CliRunner()
-    with runner.isolated_filesystem():
-        Path("jd.txt").write_text("Machine Learning Engineer\nPython required", encoding="utf-8")
-        Path("resumes").mkdir()
-        _make_pdf(Path("resumes/candidate1.pdf"), "Candidate One\nPython, PyTorch")
-
-        result = runner.invoke(rank, ["--jd", "jd.txt", "--resumes-dir", "resumes"])
-
-        assert result.exit_code == 0, result.output
-        content = Path("report.md").read_text(encoding="utf-8")
-        assert "## Pipeline Stats" in content
-
-
-def test_rank_command_passes_llm_concurrency_through_to_graph_state(monkeypatch):
-    fake_jd = JDRequirements(title="ML Engineer", required_skills=["Python"])
-    monkeypatch.setattr("evidencerank.cli.parse_jd", lambda jd_text: fake_jd)
-
-    fake_graph = MagicMock()
-    fake_graph.invoke.return_value = _fake_final_state(fake_jd)
-    monkeypatch.setattr("evidencerank.cli.build_graph", lambda: fake_graph)
-
-    runner = CliRunner()
-    with runner.isolated_filesystem():
-        Path("jd.txt").write_text("Machine Learning Engineer\nPython required", encoding="utf-8")
-        Path("resumes").mkdir()
-        _make_pdf(Path("resumes/candidate1.pdf"), "Candidate One\nPython, PyTorch")
-
-        result = runner.invoke(
-            rank,
-            ["--jd", "jd.txt", "--resumes-dir", "resumes", "--llm-concurrency", "8"],
-        )
-
-        assert result.exit_code == 0, result.output
-
-    invoked_state = fake_graph.invoke.call_args[0][0]
-    assert invoked_state["max_concurrency"] == 8
-
-
-def test_rank_command_defaults_llm_concurrency_to_four(monkeypatch):
-    fake_jd = JDRequirements(title="ML Engineer", required_skills=["Python"])
-    monkeypatch.setattr("evidencerank.cli.parse_jd", lambda jd_text: fake_jd)
-
-    fake_graph = MagicMock()
-    fake_graph.invoke.return_value = _fake_final_state(fake_jd)
-    monkeypatch.setattr("evidencerank.cli.build_graph", lambda: fake_graph)
-
-    runner = CliRunner()
-    with runner.isolated_filesystem():
-        Path("jd.txt").write_text("Machine Learning Engineer\nPython required", encoding="utf-8")
-        Path("resumes").mkdir()
-        _make_pdf(Path("resumes/candidate1.pdf"), "Candidate One\nPython, PyTorch")
-
-        result = runner.invoke(rank, ["--jd", "jd.txt", "--resumes-dir", "resumes"])
-
-        assert result.exit_code == 0, result.output
-
-    invoked_state = fake_graph.invoke.call_args[0][0]
-    assert invoked_state["max_concurrency"] == 4
-
-
-def test_rank_command_rejects_non_positive_llm_concurrency(monkeypatch):
-    runner = CliRunner()
-    with runner.isolated_filesystem():
-        Path("jd.txt").write_text("Machine Learning Engineer\nPython required", encoding="utf-8")
-        Path("resumes").mkdir()
-        _make_pdf(Path("resumes/candidate1.pdf"), "Candidate One\nPython, PyTorch")
-
-        result = runner.invoke(
-            rank,
-            ["--jd", "jd.txt", "--resumes-dir", "resumes", "--llm-concurrency", "0"],
-        )
-
-        assert result.exit_code != 0
-        assert "llm-concurrency" in result.output.lower() or "llm_concurrency" in result.output.lower()
-
-
-def test_report_cli_writes_output_file(tmp_path):
-    report_path = tmp_path / "report.json"
-    _write_minimal_report(report_path)
-    out_path = tmp_path / "report.md"
-
-    runner = CliRunner()
-    result = runner.invoke(
-        report, ["--reports", str(report_path), "--out", str(out_path)]
-    )
-
-    assert result.exit_code == 0, result.output
-    assert out_path.exists()
-    assert str(out_path) in result.output
-
-
-def _write_jd_and_resume():
-    Path("jd.txt").write_text("Machine Learning Engineer\nPython required", encoding="utf-8")
-    Path("resumes").mkdir()
-    _make_pdf(Path("resumes/candidate1.pdf"), "Candidate One\nPython")
-
-
 def _fake_final_state_two_candidates(fake_jd: JDRequirements) -> dict:
-    # Two candidates (not one) - rank_stability() requires at least 2
+    # Two candidates (not one) - rank stability requires at least 2
     # candidates common to every run to compute a correlation at all.
     return {
         "jd": fake_jd,
@@ -212,7 +82,155 @@ def _fake_final_state_two_candidates(fake_jd: JDRequirements) -> dict:
     }
 
 
-def test_rank_stability_runs_pipeline_n_times_and_writes_run_reports(monkeypatch):
+def test_rank_single_run_writes_json_and_markdown_reports(monkeypatch):
+    fake_jd = JDRequirements(title="ML Engineer", required_skills=["Python"])
+    monkeypatch.setattr("evidencerank.cli.parse_jd", lambda jd_text: fake_jd)
+
+    fake_graph = MagicMock()
+    fake_graph.invoke.return_value = _fake_final_state(fake_jd)
+    monkeypatch.setattr("evidencerank.cli.build_graph", lambda: fake_graph)
+
+    runner = CliRunner()
+    with runner.isolated_filesystem():
+        _write_jd_and_resume()
+
+        result = runner.invoke(rank, ["--jd", "jd.txt", "--resumes-dir", "resumes"])
+
+        assert result.exit_code == 0, result.output
+        assert Path("report.json").exists()
+        assert Path("report.md").exists()
+        data = json.loads(Path("report.json").read_text(encoding="utf-8"))
+        assert data["calibrated_results"][0]["candidate_id"] == "candidate1"
+        content = Path("report.md").read_text(encoding="utf-8")
+        assert "## Rankings" in content
+        assert "candidate1" in content
+
+    invoked_state = fake_graph.invoke.call_args[0][0]
+    assert "candidate1" in invoked_state["raw_resumes"]
+    assert invoked_state["prefilter_threshold"] == 0.9
+    assert invoked_state["hallucination_threshold"] == 85.0
+
+
+def test_rank_single_run_report_md_includes_pipeline_stats(monkeypatch):
+    fake_jd = JDRequirements(title="ML Engineer", required_skills=["Python"])
+    monkeypatch.setattr("evidencerank.cli.parse_jd", lambda jd_text: fake_jd)
+
+    fake_graph = MagicMock()
+    fake_graph.invoke.return_value = _fake_final_state(fake_jd)
+    monkeypatch.setattr("evidencerank.cli.build_graph", lambda: fake_graph)
+
+    runner = CliRunner()
+    with runner.isolated_filesystem():
+        _write_jd_and_resume()
+
+        result = runner.invoke(rank, ["--jd", "jd.txt", "--resumes-dir", "resumes"])
+
+        assert result.exit_code == 0, result.output
+        content = Path("report.md").read_text(encoding="utf-8")
+        assert "## Pipeline Stats" in content
+
+
+def test_rank_single_run_passes_llm_concurrency_through_to_graph_state(monkeypatch):
+    fake_jd = JDRequirements(title="ML Engineer", required_skills=["Python"])
+    monkeypatch.setattr("evidencerank.cli.parse_jd", lambda jd_text: fake_jd)
+
+    fake_graph = MagicMock()
+    fake_graph.invoke.return_value = _fake_final_state(fake_jd)
+    monkeypatch.setattr("evidencerank.cli.build_graph", lambda: fake_graph)
+
+    runner = CliRunner()
+    with runner.isolated_filesystem():
+        _write_jd_and_resume()
+
+        result = runner.invoke(
+            rank,
+            ["--jd", "jd.txt", "--resumes-dir", "resumes", "--llm-concurrency", "8"],
+        )
+
+        assert result.exit_code == 0, result.output
+
+    invoked_state = fake_graph.invoke.call_args[0][0]
+    assert invoked_state["max_concurrency"] == 8
+
+
+def test_rank_single_run_defaults_llm_concurrency_to_twelve(monkeypatch):
+    fake_jd = JDRequirements(title="ML Engineer", required_skills=["Python"])
+    monkeypatch.setattr("evidencerank.cli.parse_jd", lambda jd_text: fake_jd)
+
+    fake_graph = MagicMock()
+    fake_graph.invoke.return_value = _fake_final_state(fake_jd)
+    monkeypatch.setattr("evidencerank.cli.build_graph", lambda: fake_graph)
+
+    runner = CliRunner()
+    with runner.isolated_filesystem():
+        _write_jd_and_resume()
+
+        result = runner.invoke(rank, ["--jd", "jd.txt", "--resumes-dir", "resumes"])
+
+        assert result.exit_code == 0, result.output
+
+    invoked_state = fake_graph.invoke.call_args[0][0]
+    assert invoked_state["max_concurrency"] == 12
+
+
+def test_rank_rejects_non_positive_llm_concurrency(monkeypatch):
+    runner = CliRunner()
+    with runner.isolated_filesystem():
+        _write_jd_and_resume()
+
+        result = runner.invoke(
+            rank,
+            ["--jd", "jd.txt", "--resumes-dir", "resumes", "--llm-concurrency", "0"],
+        )
+
+        assert result.exit_code != 0
+        assert "llm-concurrency" in result.output.lower() or "llm_concurrency" in result.output.lower()
+
+
+def test_rank_requires_jd_and_resumes_dir():
+    runner = CliRunner()
+    result = runner.invoke(rank, [])
+
+    assert result.exit_code != 0
+    assert "Missing option" in result.output
+
+
+def test_rank_folds_in_extra_reports_alongside_fresh_run(monkeypatch, tmp_path):
+    fake_jd = JDRequirements(title="ML Engineer", required_skills=["Python"])
+    monkeypatch.setattr("evidencerank.cli.parse_jd", lambda jd_text: fake_jd)
+    fake_graph = MagicMock()
+    fake_graph.invoke.return_value = _fake_final_state_two_candidates(fake_jd)
+    monkeypatch.setattr("evidencerank.cli.build_graph", lambda: fake_graph)
+
+    extra_report = tmp_path / "past_run.json"
+    extra_report.write_text(json.dumps({
+        "jd": fake_jd.model_dump(),
+        "dropped": [],
+        "judge_results": {},
+        "calibrated_results": [
+            {"candidate_id": "candidate1", "final_rank": 1, "tier": "Strong Fit", "rating": 9, "calibration_notes": ""},
+            {"candidate_id": "candidate2", "final_rank": 2, "tier": "Moderate Fit", "rating": 6, "calibration_notes": ""},
+        ],
+        "hallucination_reports": {},
+    }), encoding="utf-8")
+
+    runner = CliRunner()
+    with runner.isolated_filesystem():
+        _write_jd_and_resume()
+
+        result = runner.invoke(
+            rank,
+            ["--jd", "jd.txt", "--resumes-dir", "resumes", "--reports", str(extra_report)],
+        )
+
+        assert result.exit_code == 0, result.output
+        assert Path("report.json").exists()  # single run still writes report.json
+        content = Path("report.md").read_text(encoding="utf-8")
+        # fresh run (report.json) + the folded-in extra report = 2 reports -> stability section
+        assert "## Rank Stability" in content
+
+
+def test_rank_multi_run_runs_pipeline_n_times_and_writes_run_reports(monkeypatch):
     fake_jd = JDRequirements(title="ML Engineer", required_skills=["Python"])
     monkeypatch.setattr("evidencerank.cli.parse_jd", lambda jd_text: fake_jd)
     fake_graph = MagicMock()
@@ -224,7 +242,7 @@ def test_rank_stability_runs_pipeline_n_times_and_writes_run_reports(monkeypatch
         _write_jd_and_resume()
 
         result = runner.invoke(
-            rank_stability,
+            rank,
             ["--jd", "jd.txt", "--resumes-dir", "resumes", "--runs", "3"],
         )
 
@@ -232,12 +250,13 @@ def test_rank_stability_runs_pipeline_n_times_and_writes_run_reports(monkeypatch
         assert Path("run1.json").exists()
         assert Path("run2.json").exists()
         assert Path("run3.json").exists()
+        assert not Path("report.json").exists()
         assert Path("report.md").exists()
 
     assert fake_graph.invoke.call_count == 3
 
 
-def test_rank_stability_includes_rank_stability_section(monkeypatch):
+def test_rank_multi_run_includes_rank_stability_section(monkeypatch):
     fake_jd = JDRequirements(title="ML Engineer", required_skills=["Python"])
     monkeypatch.setattr("evidencerank.cli.parse_jd", lambda jd_text: fake_jd)
     fake_graph = MagicMock()
@@ -249,7 +268,7 @@ def test_rank_stability_includes_rank_stability_section(monkeypatch):
         _write_jd_and_resume()
 
         result = runner.invoke(
-            rank_stability,
+            rank,
             ["--jd", "jd.txt", "--resumes-dir", "resumes", "--runs", "2"],
         )
 
@@ -259,38 +278,39 @@ def test_rank_stability_includes_rank_stability_section(monkeypatch):
         assert "1.000" in content  # identical rankings every run -> perfect correlation
 
 
-def test_rank_stability_defaults_runs_to_three(monkeypatch):
+def test_rank_defaults_runs_to_one(monkeypatch):
     fake_jd = JDRequirements(title="ML Engineer", required_skills=["Python"])
     monkeypatch.setattr("evidencerank.cli.parse_jd", lambda jd_text: fake_jd)
     fake_graph = MagicMock()
-    fake_graph.invoke.return_value = _fake_final_state_two_candidates(fake_jd)
+    fake_graph.invoke.return_value = _fake_final_state(fake_jd)
     monkeypatch.setattr("evidencerank.cli.build_graph", lambda: fake_graph)
 
     runner = CliRunner()
     with runner.isolated_filesystem():
         _write_jd_and_resume()
 
-        result = runner.invoke(rank_stability, ["--jd", "jd.txt", "--resumes-dir", "resumes"])
+        result = runner.invoke(rank, ["--jd", "jd.txt", "--resumes-dir", "resumes"])
 
         assert result.exit_code == 0, result.output
+        assert Path("report.json").exists()
 
-    assert fake_graph.invoke.call_count == 3
+    assert fake_graph.invoke.call_count == 1
 
 
-def test_rank_stability_rejects_runs_below_two():
+def test_rank_rejects_runs_below_one():
     runner = CliRunner()
     with runner.isolated_filesystem():
         _write_jd_and_resume()
 
         result = runner.invoke(
-            rank_stability,
-            ["--jd", "jd.txt", "--resumes-dir", "resumes", "--runs", "1"],
+            rank,
+            ["--jd", "jd.txt", "--resumes-dir", "resumes", "--runs", "0"],
         )
 
         assert result.exit_code != 0
 
 
-def test_rank_stability_passes_llm_concurrency_through_to_each_run(monkeypatch):
+def test_rank_multi_run_passes_llm_concurrency_through_to_each_run(monkeypatch):
     fake_jd = JDRequirements(title="ML Engineer", required_skills=["Python"])
     monkeypatch.setattr("evidencerank.cli.parse_jd", lambda jd_text: fake_jd)
     fake_graph = MagicMock()
@@ -302,7 +322,7 @@ def test_rank_stability_passes_llm_concurrency_through_to_each_run(monkeypatch):
         _write_jd_and_resume()
 
         result = runner.invoke(
-            rank_stability,
+            rank,
             ["--jd", "jd.txt", "--resumes-dir", "resumes", "--runs", "2", "--llm-concurrency", "8"],
         )
 
@@ -310,3 +330,20 @@ def test_rank_stability_passes_llm_concurrency_through_to_each_run(monkeypatch):
 
     for call in fake_graph.invoke.call_args_list:
         assert call[0][0]["max_concurrency"] == 8
+
+
+def test_cli_group_dispatches_to_rank_subcommand(monkeypatch):
+    fake_jd = JDRequirements(title="ML Engineer", required_skills=["Python"])
+    monkeypatch.setattr("evidencerank.cli.parse_jd", lambda jd_text: fake_jd)
+    fake_graph = MagicMock()
+    fake_graph.invoke.return_value = _fake_final_state(fake_jd)
+    monkeypatch.setattr("evidencerank.cli.build_graph", lambda: fake_graph)
+
+    runner = CliRunner()
+    with runner.isolated_filesystem():
+        _write_jd_and_resume()
+
+        result = runner.invoke(cli, ["rank", "--jd", "jd.txt", "--resumes-dir", "resumes"])
+
+        assert result.exit_code == 0, result.output
+        assert Path("report.json").exists()

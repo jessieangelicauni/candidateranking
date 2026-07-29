@@ -64,7 +64,7 @@ def test_graph_runs_extract_prefilter_judge_hallucination_calibrate(monkeypatch)
             for candidate_id in candidate_skills
         }
 
-    def fake_judge_candidates(jd_requirements, profiles, max_concurrency):
+    def fake_judge_candidates(raw_jd_text, profiles, max_concurrency):
         return {
             profile.candidate_id: JudgeResult(
                 candidate_id=profile.candidate_id,
@@ -119,6 +119,7 @@ def test_graph_runs_extract_prefilter_judge_hallucination_calibrate(monkeypatch)
     final_state = graph.invoke(
         {
             "jd": jd,
+            "raw_jd_text": "We are hiring an ML Engineer. Required skills: Python, PyTorch.",
             "raw_resumes": raw_resumes,
         }
     )
@@ -196,7 +197,7 @@ def test_graph_forwards_max_concurrency_value_to_batch_functions(monkeypatch):
 
     judge_calls: list[int] = []
 
-    def fake_judge_candidates(jd_requirements, profiles, max_concurrency):
+    def fake_judge_candidates(raw_jd_text, profiles, max_concurrency):
         judge_calls.append(max_concurrency)
         return {
             profile.candidate_id: JudgeResult(
@@ -230,7 +231,12 @@ def test_graph_forwards_max_concurrency_value_to_batch_functions(monkeypatch):
     )
 
     graph = build_graph()
-    graph.invoke({"jd": jd, "raw_resumes": raw_resumes, "max_concurrency": 8})
+    graph.invoke({
+        "jd": jd,
+        "raw_jd_text": "We are hiring an ML Engineer. Required skills: Python.",
+        "raw_resumes": raw_resumes,
+        "max_concurrency": 8,
+    })
 
     assert extract_calls == [8]
     assert judge_calls == [8]

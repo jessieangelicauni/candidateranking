@@ -18,9 +18,7 @@ dependencies = [
 ]
 
 [project.scripts]
-evidencerank = "evidencerank.cli:rank"
-evidencerank-report = "evidencerank.cli:report"
-evidencerank-rank-stability = "evidencerank.cli:rank_stability"
+evidencerank = "evidencerank.cli:cli"
 
 [dependency-groups]
 dev = [

@@ -15,7 +15,7 @@ quoted evidence from the source resume.
 The target evaluation set is on the order of 200 IT candidates against a single JD. The
 current project folder has 5 sample resumes (`Daniel Taylor.pdf`, `Danny Morgan.pdf`,
 `James morgan.pdf`, `Katie Hoover.pdf`, `Michael Burton.pdf`) and one JD
-(`machine_learning_engineer.txt`) used to build and validate the pipeline before it is
+(`ai_data_engineer.txt`) used to build and validate the pipeline before it is
 pointed at the full candidate pool.
 
 **Hard constraint:** no deterministic, rule-based scoring formula (e.g., weighted sums of

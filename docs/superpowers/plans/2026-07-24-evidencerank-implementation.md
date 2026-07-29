@@ -1998,7 +1998,7 @@ description, using local Ollama models orchestrated with LangGraph. See
 
 ```bash
 uv run evidencerank \
-  --jd machine_learning_engineer.txt \
+  --jd ai_data_engineer.txt \
   --resumes-dir . \
   --out-json report.json \
   --out-md report.md
@@ -2043,7 +2043,7 @@ local inference.
 
 Run:
 ```bash
-uv run evidencerank --jd machine_learning_engineer.txt --resumes-dir . --out-json report.json --out-md report.md
+uv run evidencerank --jd ai_data_engineer.txt --resumes-dir . --out-json report.json --out-md report.md
 ```
 
 Expected: the command exits 0, prints `Wrote report.json and report.md`, and both files

@@ -305,7 +305,7 @@ Run the combined command against the real resumes/JD in this repo, against a liv
 
 ```bash
 uv run evidencerank \
-  --jd machine_learning_engineer.txt \
+  --jd ai_data_engineer.txt \
   --resumes-dir resumes \
   --out-json /tmp/manual_report.json \
   --out-md /tmp/manual_report.md \

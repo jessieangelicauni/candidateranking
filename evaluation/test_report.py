@@ -1,6 +1,8 @@
 import json
 from pathlib import Path
 
+import pytest
+
 from evidencerank.models import (
     CalibratedResult,
     CandidateProfile,
@@ -17,6 +19,8 @@ from evaluation.report import (
     build_json_report,
     build_markdown_report,
     compute_pipeline_stats,
+    load_rank_map,
+    rank_stability,
     write_json_report,
     write_markdown_report,
 )
@@ -153,6 +157,7 @@ def test_compute_pipeline_stats_counts_candidates(tmp_path):
         "dropped_prefilter": 1,
         "evaluated_by_judge": 2,
         "hallucination_rate": 0.5,
+        "mean_evidence_relevancy": 0.0,  # no evidence claims in this fixture
     }
 
 
@@ -165,6 +170,122 @@ def test_compute_pipeline_stats_hallucination_rate_is_zero_when_no_one_judged(tm
     stats = compute_pipeline_stats(report_path)
 
     assert stats["hallucination_rate"] == 0.0
+
+
+class _FakeRelevancyEmbedder:
+    # Deterministic stand-in for the real sentence-transformer: text
+    # containing "Python" gets an axis-aligned vector, "Baking" gets the
+    # orthogonal axis, anything else gets an equal blend - lets tests assert
+    # exact cosine-similarity outcomes instead of tolerating a real model's
+    # noise.
+    def encode(self, texts):
+        import numpy as np
+
+        vectors = []
+        for text in texts:
+            if "Python" in text:
+                vectors.append([1.0, 0.0])
+            elif "Baking" in text:
+                vectors.append([0.0, 1.0])
+            else:
+                vectors.append([0.5, 0.5])
+        return np.array(vectors)
+
+
+def test_compute_pipeline_stats_evidence_relevancy_scores_relevant_claims_higher(monkeypatch, tmp_path):
+    monkeypatch.setattr("evaluation.report._get_embedder", lambda: _FakeRelevancyEmbedder())
+
+    report_path = tmp_path / "report.json"
+    _write_report(
+        report_path,
+        jd={
+            "title": "ML Engineer", "required_skills": ["Python"], "nice_to_have_skills": [],
+            "min_experience_years": 0, "education": "", "responsibilities": [],
+        },
+        profiles={"relevant": {"raw_cv_text": "x"}, "irrelevant": {"raw_cv_text": "y"}},
+        judge_results={
+            "relevant": {
+                "tier": "Strong Fit", "rating": 9,
+                "evidence": [{"claim": "Strong Python background", "quote": "5 years Python"}],
+            },
+            "irrelevant": {
+                "tier": "Weak Fit", "rating": 2,
+                "evidence": [{"claim": "Extensive Baking experience", "quote": "Baking pastries"}],
+            },
+        },
+    )
+
+    stats = compute_pipeline_stats(report_path)
+
+    # relevant candidate's claim is identical-axis to the JD's "Python" requirement (cosine 1.0),
+    # irrelevant candidate's claim is orthogonal (cosine 0.0) -> mean of the two candidates is 0.5.
+    assert stats["mean_evidence_relevancy"] == 0.5
+
+
+def test_compute_pipeline_stats_evidence_relevancy_zero_when_no_evidence(monkeypatch, tmp_path):
+    monkeypatch.setattr("evaluation.report._get_embedder", lambda: _FakeRelevancyEmbedder())
+
+    report_path = tmp_path / "report.json"
+    _write_report(
+        report_path,
+        profiles={"alice": {"raw_cv_text": "x"}},
+        judge_results={"alice": {"tier": "Strong Fit", "rating": 9, "evidence": []}},
+    )
+
+    stats = compute_pipeline_stats(report_path)
+
+    assert stats["mean_evidence_relevancy"] == 0.0
+
+
+def test_compute_pipeline_stats_evidence_relevancy_zero_when_jd_has_no_reference_text(monkeypatch, tmp_path):
+    monkeypatch.setattr("evaluation.report._get_embedder", lambda: _FakeRelevancyEmbedder())
+
+    report_path = tmp_path / "report.json"
+    _write_report(
+        report_path,
+        jd={
+            "title": "ML Engineer", "required_skills": [], "nice_to_have_skills": [],
+            "min_experience_years": 0, "education": "", "responsibilities": [],
+        },
+        profiles={"alice": {"raw_cv_text": "x"}},
+        judge_results={
+            "alice": {
+                "tier": "Strong Fit", "rating": 9,
+                "evidence": [{"claim": "Strong Python background", "quote": "5 years Python"}],
+            }
+        },
+    )
+
+    stats = compute_pipeline_stats(report_path)
+
+    assert stats["mean_evidence_relevancy"] == 0.0
+
+
+def test_build_markdown_report_includes_evidence_relevancy_row(monkeypatch, tmp_path):
+    monkeypatch.setattr("evaluation.report._get_embedder", lambda: _FakeRelevancyEmbedder())
+
+    report_path = tmp_path / "report.json"
+    _write_report(
+        report_path,
+        jd={
+            "title": "ML Engineer", "required_skills": ["Python"], "nice_to_have_skills": [],
+            "min_experience_years": 0, "education": "", "responsibilities": [],
+        },
+        profiles={"alice": {"raw_cv_text": "x"}},
+        judge_results={
+            "alice": {
+                "tier": "Strong Fit", "rating": 9,
+                "evidence": [{"claim": "Strong Python background", "quote": "5 years Python"}],
+            }
+        },
+        calibrated_results=[
+            {"candidate_id": "alice", "final_rank": 1, "tier": "Strong Fit", "rating": 9, "calibration_notes": ""}
+        ],
+    )
+
+    markdown = build_markdown_report([report_path])
+
+    assert "| Evidence Relevancy | 1.000 |" in markdown
 
 
 def _write_calibrated_report(path: Path, ranks: dict[str, int]) -> None:
@@ -400,6 +521,26 @@ def test_build_markdown_report_shows_dash_when_hallucination_report_has_no_unver
     assert "| — |" in markdown
 
 
+def test_build_markdown_report_tables_have_header_separator_rows(tmp_path):
+    # Regression test: a Markdown table without a "|---|---|" separator row
+    # right after the header renders as plain text, not a table, in GitHub/VS
+    # Code/any CommonMark renderer.
+    report_a = tmp_path / "report_a.json"
+    report_b = tmp_path / "report_b.json"
+    _write_calibrated_report(report_a, {"alice": 1, "bob": 2})
+    _write_calibrated_report(report_b, {"alice": 1, "bob": 2})
+    data = json.loads(report_a.read_text(encoding="utf-8"))
+    data["stage_timings"] = {"extract_profiles": 1.5}
+    report_a.write_text(json.dumps(data), encoding="utf-8")
+
+    markdown = build_markdown_report([report_a, report_b])
+
+    assert "| Rank | Candidate | Tier | Rating | Key Evidence | Hallucination Flags | Calibration Notes |\n|---|---|---|---|---|---|---|" in markdown
+    assert "| Metric | Value |\n|---|---|" in markdown
+    assert "| Stage | Seconds |\n|---|---|" in markdown
+    assert "| Runs | Mean Spearman | Mean Kendall Tau |\n|---|---|---|" in markdown
+
+
 def test_build_markdown_report_shows_dash_when_no_hallucination_report_present(tmp_path):
     report_path = tmp_path / "report.json"
     _write_report(
@@ -414,3 +555,74 @@ def test_build_markdown_report_shows_dash_when_no_hallucination_report_present(t
     markdown = build_markdown_report([report_path])
 
     assert "| — |" in markdown
+
+
+def _write_rank_stability_report(path: Path, ranks: dict[str, int]) -> None:
+    path.write_text(
+        json.dumps({
+            "calibrated_results": [
+                {"candidate_id": candidate_id, "final_rank": final_rank}
+                for candidate_id, final_rank in ranks.items()
+            ]
+        }),
+        encoding="utf-8",
+    )
+
+
+def test_load_rank_map_reads_candidate_ranks(tmp_path):
+    report_path = tmp_path / "run1.json"
+    _write_rank_stability_report(report_path, {"a": 1, "b": 2})
+
+    rank_map = load_rank_map(report_path)
+
+    assert rank_map == {"a": 1, "b": 2}
+
+
+def test_rank_stability_identical_rankings_scores_one(tmp_path):
+    run1 = tmp_path / "run1.json"
+    run2 = tmp_path / "run2.json"
+    _write_rank_stability_report(run1, {"a": 1, "b": 2, "c": 3})
+    _write_rank_stability_report(run2, {"a": 1, "b": 2, "c": 3})
+
+    result = rank_stability([str(run1), str(run2)])
+
+    assert result["mean_spearman"] == 1.0
+    assert result["mean_kendall_tau"] == 1.0
+    assert result["n_runs"] == 2
+
+
+def test_rank_stability_reversed_rankings_scores_negative_one(tmp_path):
+    run1 = tmp_path / "run1.json"
+    run2 = tmp_path / "run2.json"
+    _write_rank_stability_report(run1, {"a": 1, "b": 2, "c": 3})
+    _write_rank_stability_report(run2, {"a": 3, "b": 2, "c": 1})
+
+    result = rank_stability([str(run1), str(run2)])
+
+    assert result["mean_spearman"] == -1.0
+
+
+def test_rank_stability_intersects_candidate_ids_across_runs(tmp_path):
+    # run2's shortlist doesn't include "d" (e.g. it ranked outside the judge's
+    # top 10 in that run). The shared candidates a, b, c have identical
+    # relative order in both runs, so correlation over just {a, b, c} is 1.0.
+    run1 = tmp_path / "run1.json"
+    run2 = tmp_path / "run2.json"
+    _write_rank_stability_report(run1, {"a": 1, "b": 2, "c": 3, "d": 4})
+    _write_rank_stability_report(run2, {"a": 1, "b": 2, "c": 3})
+
+    result = rank_stability([str(run1), str(run2)])
+
+    assert result["mean_spearman"] == 1.0
+    assert result["mean_kendall_tau"] == 1.0
+    assert result["n_runs"] == 2
+
+
+def test_rank_stability_raises_when_fewer_than_two_candidates_are_common(tmp_path):
+    run1 = tmp_path / "run1.json"
+    run2 = tmp_path / "run2.json"
+    _write_rank_stability_report(run1, {"a": 1, "b": 2})
+    _write_rank_stability_report(run2, {"a": 1})
+
+    with pytest.raises(ValueError):
+        rank_stability([str(run1), str(run2)])
