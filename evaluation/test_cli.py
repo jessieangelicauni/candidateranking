@@ -7,7 +7,7 @@ from fpdf import FPDF
 
 from evidencerank.models import CalibratedResult, JDRequirements, Tier
 
-from evaluation.cli import eval_report, rank_stability
+from evaluation.cli import rank_stability, report
 
 
 def _write_minimal_report(path: Path) -> None:
@@ -32,14 +32,14 @@ def _write_minimal_report(path: Path) -> None:
     path.write_text(json.dumps(data), encoding="utf-8")
 
 
-def test_eval_report_cli_writes_output_file(tmp_path):
+def test_report_cli_writes_output_file(tmp_path):
     report_path = tmp_path / "report.json"
     _write_minimal_report(report_path)
-    out_path = tmp_path / "evaluation-metric.md"
+    out_path = tmp_path / "report.md"
 
     runner = CliRunner()
     result = runner.invoke(
-        eval_report, ["--reports", str(report_path), "--out", str(out_path)]
+        report, ["--reports", str(report_path), "--out", str(out_path)]
     )
 
     assert result.exit_code == 0, result.output
@@ -103,7 +103,7 @@ def test_rank_stability_runs_pipeline_n_times_and_writes_run_reports(monkeypatch
         assert Path("run1.json").exists()
         assert Path("run2.json").exists()
         assert Path("run3.json").exists()
-        assert Path("evaluation-metric.md").exists()
+        assert Path("report.md").exists()
 
     assert fake_graph.invoke.call_count == 3
 
@@ -125,7 +125,7 @@ def test_rank_stability_includes_rank_stability_section(monkeypatch):
         )
 
         assert result.exit_code == 0, result.output
-        content = Path("evaluation-metric.md").read_text(encoding="utf-8")
+        content = Path("report.md").read_text(encoding="utf-8")
         assert "## Rank Stability" in content
         assert "1.000" in content  # identical rankings every run -> perfect correlation
 
