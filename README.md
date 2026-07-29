@@ -5,7 +5,10 @@ description, using local Ollama models orchestrated with LangGraph. See
 `docs/superpowers/specs/2026-07-24-evidencerank-design.md` for the full design, and
 `docs/superpowers/specs/2026-07-27-eval-metric-report-design.md` /
 `docs/superpowers/specs/2026-07-27-eval-report-cli-integration-design.md` for the
-evaluation-report tooling described below. See
+original evaluation-report tooling this section describes — see
+`docs/superpowers/specs/2026-07-29-unify-report-output-design.md` for a later change
+that merges that tooling's separate Markdown evaluation report into `report.md`, superseding
+those two docs' description of a standalone evaluation-report output file. See
 `docs/superpowers/specs/2026-07-27-judge-grounding-and-hallucination-design.md` for a
 later change that reorders the pipeline (Hallucination Checker now runs before the Pool
 Calibrator, not after) and reworks Judge grounding — supersedes the pipeline diagram in
@@ -48,12 +51,11 @@ context window; see the `CALIBRATOR_NUM_CTX` comment in `agents/calibrator.py` i
 running against hundreds of candidates.
 
 This produces `report.json` (full evidence trail, including dropped candidates and
-hallucination check results), `report.md` (a ranked Markdown table), and
-`evaluation-metric.md` (the evaluation metric report — see
-[Evaluation metric report](#evaluation-metric-report) below), all written to the
-directory you run `evidencerank` from. Each run overwrites the previous one's
-`report.json`/`report.md`/`evaluation-metric.md` — rename them (e.g. `mv report.json
-run1.json`) between runs if you need to keep more than one.
+hallucination check results) and `report.md` (a ranked Markdown table plus pipeline
+stats — see [Evaluation metric report](#evaluation-metric-report) below for what the
+stats section contains), both written to the directory you run `evidencerank` from.
+Each run overwrites the previous one's `report.json`/`report.md` — rename them (e.g.
+`mv report.json run1.json`) between runs if you need to keep more than one.
 
 Extracted candidate profiles are cached at `.cache/evidencerank/extract_profiles/`
 (relative to the directory you run `evidencerank` from), keyed by a hash of the
@@ -110,11 +112,6 @@ audit-trail artifact. It is not the same view the Judge model sees (that input i
 redacted for blind evaluation; see the design spec's Fairness section). Don't treat or
 share `report.json` as if it were already anonymized.
 
-Every run also generates the evaluation metric report (`evaluation-metric.md`) — see
-[Evaluation metric report](#evaluation-metric-report) below for what it contains. This is
-pure computation over the run's `report.json` (no LLM calls, no extra setup beyond what
-`rank` already requires).
-
 ## Model configuration
 
 Override any stage's model with an environment variable:
@@ -142,18 +139,17 @@ cp .env.example .env
 
 ## Research evaluation harness
 
-The `evaluation/` package is separate from the production pipeline (`src/evidencerank/`):
+`evaluation/report.py` builds every report the pipeline produces — including
+`report.json` and `report.md` themselves, called directly by `src/evidencerank/cli.py`'s
+`rank` command — plus the research-only aggregates appended to `report.md`'s Pipeline
+Stats/Rank Stability sections (candidates submitted, pre-filter pass/drop, hallucination
+rate, rank correlation across repeated runs). `evaluation/rank_stability.py` computes the
+Spearman/Kendall-tau rank correlation piece.
 
-- `evaluation/rank_stability.py` — computes Spearman/Kendall-tau rank correlation across
-  repeated runs on the same input, to report ranking consistency.
-- `evaluation/report.py` — aggregates the above (plus pipeline stats: candidates
-  submitted, pre-filter pass/drop, hallucination rate) into a single Markdown
-  evaluation report, suitable for a paper appendix.
-
-Both signals are deterministic — fuzzy string-matching for the hallucination rate,
-rank-correlation statistics for rank stability — with no LLM judging another LLM's
-output involved, and no extra model or `ollama serve` requirement beyond what the
-production pipeline itself already needs.
+Both the hallucination-rate and rank-stability signals are deterministic — fuzzy
+string-matching for the former, rank-correlation statistics for the latter — with no LLM
+judging another LLM's output involved, and no extra model or `ollama serve` requirement
+beyond what the production pipeline itself already needs.
 
 To measure rank stability, `uv run evidencerank-rank-stability` runs the pipeline
 multiple times on the same JD/resumes automatically — no manual renaming needed:
@@ -164,22 +160,23 @@ uv run evidencerank-rank-stability --jd machine_learning_engineer.txt --resumes-
 
 This runs the pipeline `--runs` times (default `3`, minimum `2`), writes each run's full
 report as `run1.json`, `run2.json`, ... (never overwritten, so every run stays available
-for inspection), and builds `evaluation-metric.md` from all of them — pipeline stats
+for inspection), and builds `report.md` from all of them — rankings and pipeline stats
 from `run1.json`, rank stability (Spearman/Kendall-tau) across all of them.
 `--llm-concurrency` and `--out` work the same as the other commands.
 
 If you'd rather drive this manually (e.g. against runs you already have, or with
 resumes/JD changing between runs), run the pipeline yourself N times, renaming
 `report.json` after each run since every run overwrites it, then call
-`evidencerank-eval-report` (below) with all the paths.
+`evidencerank-report` (below) with all the paths.
 
 ### Evaluation metric report
 
-`uv run evidencerank-eval-report` builds a Markdown report combining pipeline stats and
-(when 2+ runs are given) rank stability, from one or more existing `report.json` files:
+`uv run evidencerank-report` builds a Markdown report combining the candidate rankings,
+pipeline stats, and (when 2+ runs are given) rank stability, from one or more existing
+`report.json` files:
 
 ```bash
-uv run evidencerank-eval-report --reports report.json --out evaluation-metric.md
+uv run evidencerank-report --reports report.json --out report.md
 ```
 
 If you're evaluating a single run right after producing it, `evidencerank rank` (see
@@ -190,14 +187,14 @@ Pass `--reports` once per report path — repeat it for each additional run to a
 include rank stability across runs:
 
 ```bash
-uv run evidencerank-eval-report \
+uv run evidencerank-report \
   --reports run1.json --reports run2.json --reports run3.json \
-  --out evaluation-metric.md
+  --out report.md
 ```
 
-Pipeline stats are always computed from the first `--reports` path given; every path is
-used for rank stability. Both are pure computation over `report.json` — no `ollama serve`
-or model required to build this report.
+The rankings and pipeline stats are always computed from the first `--reports` path
+given; every path is used for rank stability. All of this is pure computation over
+`report.json` — no `ollama serve` or model required to build this report.
 
 When the underlying `report.json` includes per-stage timing (`stage_timings`,
 added by the production pipeline), the report also includes a "Stage Timings"
