@@ -41,12 +41,6 @@ def test_rank_command_writes_json_and_markdown_reports(monkeypatch):
     fake_graph.invoke.return_value = _fake_final_state(fake_jd)
     monkeypatch.setattr("evidencerank.cli.build_graph", lambda: fake_graph)
 
-    called = []
-    monkeypatch.setattr(
-        "evaluation.report.write_eval_markdown_report",
-        lambda *args, **kwargs: called.append(args),
-    )
-
     runner = CliRunner()
     with runner.isolated_filesystem():
         Path("jd.txt").write_text("Machine Learning Engineer\nPython required", encoding="utf-8")
@@ -60,6 +54,9 @@ def test_rank_command_writes_json_and_markdown_reports(monkeypatch):
         assert Path("report.md").exists()
         data = json.loads(Path("report.json").read_text(encoding="utf-8"))
         assert data["calibrated_results"][0]["candidate_id"] == "candidate1"
+        content = Path("report.md").read_text(encoding="utf-8")
+        assert "## Rankings" in content
+        assert "candidate1" in content
 
     invoked_state = fake_graph.invoke.call_args[0][0]
     assert "candidate1" in invoked_state["raw_resumes"]
@@ -67,7 +64,7 @@ def test_rank_command_writes_json_and_markdown_reports(monkeypatch):
     assert invoked_state["hallucination_threshold"] == 85.0
 
 
-def test_rank_command_always_writes_eval_report(monkeypatch):
+def test_rank_command_report_md_includes_pipeline_stats(monkeypatch):
     fake_jd = JDRequirements(title="ML Engineer", required_skills=["Python"])
     monkeypatch.setattr("evidencerank.cli.parse_jd", lambda jd_text: fake_jd)
 
@@ -84,10 +81,8 @@ def test_rank_command_always_writes_eval_report(monkeypatch):
         result = runner.invoke(rank, ["--jd", "jd.txt", "--resumes-dir", "resumes"])
 
         assert result.exit_code == 0, result.output
-        assert Path("evaluation-metric.md").exists()
-        content = Path("evaluation-metric.md").read_text(encoding="utf-8")
+        content = Path("report.md").read_text(encoding="utf-8")
         assert "## Pipeline Stats" in content
-        assert "## GEval Metrics" not in content
 
 
 def test_rank_command_passes_llm_concurrency_through_to_graph_state(monkeypatch):
@@ -97,11 +92,6 @@ def test_rank_command_passes_llm_concurrency_through_to_graph_state(monkeypatch)
     fake_graph = MagicMock()
     fake_graph.invoke.return_value = _fake_final_state(fake_jd)
     monkeypatch.setattr("evidencerank.cli.build_graph", lambda: fake_graph)
-
-    monkeypatch.setattr(
-        "evaluation.report.write_eval_markdown_report",
-        lambda *args, **kwargs: None,
-    )
 
     runner = CliRunner()
     with runner.isolated_filesystem():
@@ -127,12 +117,6 @@ def test_rank_command_defaults_llm_concurrency_to_four(monkeypatch):
     fake_graph = MagicMock()
     fake_graph.invoke.return_value = _fake_final_state(fake_jd)
     monkeypatch.setattr("evidencerank.cli.build_graph", lambda: fake_graph)
-
-    called = []
-    monkeypatch.setattr(
-        "evaluation.report.write_eval_markdown_report",
-        lambda *args, **kwargs: called.append(args),
-    )
 
     runner = CliRunner()
     with runner.isolated_filesystem():
